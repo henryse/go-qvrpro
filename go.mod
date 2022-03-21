@@ -1,3 +1,3 @@
-module go-qvrpro
+module qvrpro
 
 go 1.17

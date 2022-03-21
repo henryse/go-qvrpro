@@ -541,7 +541,7 @@ func (connection *Connection) LiveStream(channelId string, streamId string) ([]b
 	return []byte(fmt.Sprintf("{\"Not\":\"Finished\"}")), nil
 }
 
-type QvrProLogEntry struct {
+type LogEntry struct {
 	UTCTime         int64    `json:"UTC_time"`
 	UTCTimeS        string   `json:"UTC_time_s"`
 	Content         string   `json:"content"`
@@ -567,12 +567,12 @@ type QvrProLogEntry struct {
 	SubTypeOrder    int      `json:"sub_type_order,omitempty"`
 }
 
-type QvrProLogsResponse struct {
-	Code          int              `json:"code"`
-	Items         []QvrProLogEntry `json:"items"`
-	Mesg          string           `json:"mesg"`
-	ResponseItems int              `json:"responseItems"`
-	TotalItems    int              `json:"totalItems"`
+type LogsResponse struct {
+	Code          int        `json:"code"`
+	Items         []LogEntry `json:"items"`
+	Mesg          string     `json:"mesg"`
+	ResponseItems int        `json:"responseItems"`
+	TotalItems    int        `json:"totalItems"`
 }
 
 //goland:noinspection GoUnusedConst
@@ -585,8 +585,8 @@ const (
 	SurveillanceSettingsLogType    = 5
 )
 
-func (connection *Connection) Logs(logType uint, start uint, maxResults uint) []QvrProLogEntry {
-	qvrProLogEntry := make([]QvrProLogEntry, 0)
+func (connection *Connection) Logs(logType uint, start uint, maxResults uint, startTime uint, endTime uint) []LogEntry {
+	qvrProLogEntry := make([]LogEntry, 0)
 
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
@@ -599,7 +599,15 @@ func (connection *Connection) Logs(logType uint, start uint, maxResults uint) []
 	params := url.Values{}
 	params.Add("sid", connection.sid)
 	if AllLogType != logType {
+		params.Add("log_type", strconv.Itoa(int(startTime)))
+	}
+	if startTime != 0 {
+		params.Add("end_time", strconv.Itoa(int(endTime)))
+
+	}
+	if endTime != 0 {
 		params.Add("log_type", strconv.Itoa(int(logType)))
+
 	}
 	params.Add("start", strconv.Itoa(int(start)))
 	params.Add("max_results", strconv.Itoa(int(maxResults)))
@@ -613,7 +621,7 @@ func (connection *Connection) Logs(logType uint, start uint, maxResults uint) []
 	response, err := client.Get(baseUrl.String())
 
 	body, err := ioutil.ReadAll(response.Body)
-	var qvrResponse QvrProLogsResponse
+	var qvrResponse LogsResponse
 	err = json.Unmarshal(body, &qvrResponse)
 	if err != nil {
 		return qvrProLogEntry

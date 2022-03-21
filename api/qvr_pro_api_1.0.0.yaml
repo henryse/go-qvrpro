@@ -1,0 +1,4370 @@
+swagger: '2.0'
+info:
+  title: QVR Pro API
+  description: >-
+    This SDK covers three main categories, which are QVR Pro SDk, Streaming Output API, and Metadata Vault API. </br>
+    **QVR Pro SDK** handles different kinds of QVR Pro features, including authorization, camera settings, camera control, logs, live streaming, and playback. </br>
+    **Streaming Output API** allows you to retrive live stream via RTMP, and HLS, which makes live stream show on browsers easily. </br>
+    **Metadata Vault** provides solution for saving, filtering, querying metadata.
+    Metadata can be JSON data in API defined format or any UTF-8 encoded string.
+    Vault is metdata storage. By API, user can create own vault and save
+    Metadata to it. User can also bind the vault with cameras on QVR Pro, then
+    print metadata on relative channel screen(QVR Pro Client). Filter can help
+    user let theit metadata be more readable on screen. For easy to querting
+    metadata, user can use many fields like vault name, timestamp to query.  
+    
+    ---
+
+    QVR Pro API version is shown on the right of the title. The supported API
+    versions is now "1.0.0".
+  version: 1.0.0
+schemes:
+  - http
+produces:
+  - application/json
+paths:
+  /cgi-bin/authLogin.cgi:
+    get:
+      summary: Get SID and login
+      description: |
+        Get SID and login.</br>
+        ---
+        CGI name: authLogin.cgi </br>
+        CGI Path{CGI}: /cgi-bin/authLogin.cgi </br>
+        ---
+        __1. Get SID and login__ </br> </br>
+        Method: __GET__ </br>
+        HTTP Request: </br>
+        _{CGI}?user={NAME}&serviceKey=1&pwd={PASSWORD}_ </br>
+
+        <br> ***Responses*** </br>
+        | Authlogin.cgi response |
+        | ---------------------  |
+            Get SID 
+        
+            <QDocRoot version="1.0"> 
+            ...
+            <authSid>81ulhjmu</authSid>  Session id
+            ...
+            </QDocRoot>
+        
+            Fail
+        
+            <QDocRoot version="1.0"> 
+            ...
+            <errorValue>-1</errorValue> 
+            ...
+            </QDocRoot>
+      parameters:
+        - name: user
+          description: user name
+          in: query
+          required: true
+          type: string
+        - name: serviceKey
+          description: 'service key, must be 1'
+          in: query
+          required: true
+          type: number
+        - name: pwd
+          description: BASE64 encrypted
+          in: query
+          required: true
+          type: string
+      tags:
+        - 'SDK Authorization'
+      responses:
+        '200':
+          description: OK
+  /cgi-bin/authLogout.cgi:
+    get:
+      summary: Use SID to logout
+      description: |
+        Use SID to logout.</br>
+        ---
+        CGI name: authLogout.cgi </br>
+        CGI Path{CGI}: /cgi-bin/authLogout.cgi </br>
+        ---
+        __1. Get SID and login__ </br> </br>
+        Method: __GET__ </br>
+        HTTP Request: </br>
+        _{CGI}?sid={SID}&logout={LOGOUT}_ </br>
+      parameters:
+        - name: sid
+          description: QTS session ID
+          in: query
+          required: true
+          type: string
+        - name: logout
+          description: logout paramter. Should set it to 1
+          in: query
+          required: true
+          type: number
+      tags:
+        - 'SDK Authorization'
+      responses:
+        '200':
+          description: OK
+  /qvrpro/camera/search:
+    get:
+      summary: Search new cameras in LAN via upnp and udp.
+      description: |
+        Search new cameras in LAN via upnp and udp.
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xB1000000|API version not support|
+        |0xB1000001|Authorization fail|
+        |0xB1000002|Insufficient permission|
+        |0xB1000004|Invalid request|
+        |0xB1000021|Failed getting camera license info
+        |0xB1000022|Failed getting license domain info
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            API version. Supported versions are show at the top of this API
+            document.
+          in: query
+          required: true
+          type: string
+      tags:
+        - 'SDK Camera Settings'
+      responses:
+        '200':
+          description: >-
+            Called CGI successfully. A JSON object data shows cameras found in
+            LAN, including its umsid, IP address, vender, model, MAC address,
+            and port.
+          schema:
+            $ref: '#/definitions/API_SDK_CAMERA_SEARCH_RESPONSE'
+        '403':
+          description: Forbidden.
+          schema:
+            $ref: '#/definitions/API_SDK_Error_default'
+  /qvrpro/camera/test:
+    get:
+      summary: Test single camera Connection
+      description: |
+        Test single camera Connection. 
+
+        ---
+
+
+        You have to get UMSID (brand+model) from API "/qvrpro/camera/support"
+        in order to test the specific camera.
+
+        Below are the error codes.
+
+
+        --- 
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xB1000000|API version not support|
+        |0xB1000001|Authorization fail|
+        |0xB1000002|Insufficient permission|
+        |0xB1000003|Illegal parameter or missing of parameter|
+        |0xB1000004|Invalid request|
+        |0xB1000007|API camera test fail|
+        |0xB1000008|generic error |
+        |0xB1000009| connection fail |
+        |0xB100000A|authentication fail |
+        |0xB100000B|set media config fail |
+        |0xB100000C|http reply fail|
+        |0xB100000D|model mismatch|
+        |0xB100000E|admin password incorrect|
+        |0xB100000F|guest password incorrect|
+        |0xB1000010|RTSP request fail|
+        |0xB1000011|RTP data not received|
+        |0xB1000012|JPEG success, MPEG4 RTSP fail|
+        |0xB1000013|JPEG success, MPEG4 RTP fail|
+        |0xB1000014|MPEG4 test locked|
+        |0xB1000015|user already login|
+        |0xB1000016|JPEG success, H264 RTSP fail|
+        |0xB1000017|JPEG success, H264 RTP fail|
+        |0xB1000018|H264 test locked|
+        |0xB1000019|RTSP DESCRIBE fail|
+        |0xB100001A|RTSP SETUP fail|
+        |0xB100001B|RTSP PLAY fail|
+        |0xB100001C|RTSP OPTION fail|
+        |0xB100001D|RTSP TEARDOWN fail|
+        |0xB1000021|Failed getting camera license info
+        |0xB1000022|Failed getting license domain info
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            API version. Supported versions are show at the top of this API
+            document.
+          in: query
+          required: true
+          type: string
+        - name: ipcam_umsid
+          description: >-
+            Camera UMSID, acquired from API "/qvrpro/camera/support". You should
+            combine umsid of brand and model to be the parameter value.
+          in: query
+          required: true
+          type: string
+        - name: ipcam_address
+          description: Camera IP
+          in: query
+          required: true
+          type: string
+        - name: ipcam_port
+          description: Camera HTTP port
+          in: query
+          required: true
+          type: number
+        - name: ipcam_username
+          description: Camera user name
+          in: query
+          required: true
+          type: string
+        - name: ipcam_password
+          description: Camera password
+          in: query
+          required: true
+          type: string
+        - name: ipcam_rtsp_port
+          description: Camera RTSP port (optional)
+          in: query
+          required: true
+          type: number
+        - name: ipcam_http_video_url
+          description: Camera HTTP video url (optional)
+          in: query
+          required: false
+          type: number
+        - name: nvr_channel_id
+          description: NVR channel id (optional)
+          in: query
+          required: false
+          type: number
+      tags:
+        - 'SDK Camera Settings'
+      responses:
+        '200':
+          description: >-
+            Called CGI successfully. A JSON object data shows the result of the
+            testing a camera.
+          schema:
+            $ref: '#/definitions/API_SDK_CAMERA_TEST_RESPONSE'
+        '403':
+          description: Authentication is failed.
+          schema:
+            $ref: '#/definitions/API_SDK_Error_default'
+  /qvrpro/camera/list:
+    get:
+      summary: Get one camera or all cameras connection status and recording status
+      description: |
+        Get all cameras connection status and recording status
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xB1000000|API version not support|
+        |0xB1000001|Authorization fail|
+        |0xB1000002|Insufficient permission|
+        |0xB1000003|Illegal parameter or missing of parameter|
+        |0xB1000004|Invalid request|
+        |0xB100001E|Get camera info fail|
+        |0xB1000021|Failed getting camera license info
+        |0xB1000022|Failed getting license domain info
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            API version. Supported versions are show at the top of this API
+            document.
+          in: query
+          required: true
+          type: string
+        - name: guid
+          description: >-
+            Unique identifier representing a specific channel. You can acquire
+            this value by using /camera/list API.
+          in: query
+          required: false
+          type: string
+      tags:
+        - 'SDK Camera Settings'
+      responses:
+        '200':
+          description: >-
+            Called CGI successfully. A JSON object data shows a list containing
+            the information of cameras mounted in QVR Pro.
+          schema:
+            $ref: '#/definitions/API_SDK_CAMERA_STATUS_RESPONSE'
+        '403':
+          description: Forbidden.
+          schema:
+            $ref: '#/definitions/API_SDK_Error_default'
+  /qvrpro/camera/capability:
+    get:
+      summary: Get one camera or all cameras connection capability and recording status
+      description: |
+        Get all cameras connection status and recording status
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xB1000000|API version not support|
+        |0xB1000001|Authorization fail|
+        |0xB1000002|Insufficient permission|
+        |0xB1000003|Illegal parameter or missing of parameter|
+        |0xB1000004|Invalid request|
+        |0xB1000021|Failed getting camera license info
+        |0xB1000022|Failed getting license domain info
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            API version. Supported versions are show at the top of this API
+            document.
+          in: query
+          required: true
+          type: string
+        - name: act
+          description: >-
+            API action (should be get_camera_capability or
+            get_event_capability).</br> get_event_capability doesn't contain PTZ
+            support information
+          in: query
+          required: true
+          type: string
+      tags:
+        - 'SDK Camera Settings'
+      responses:
+        '200':
+          description: >-
+            Called CGI successfully. A JSON object data shows a list containing
+            all the capability information of cameras mounted in QVR Pro.
+          schema:
+            $ref: '#/definitions/API_SDK_CAMERA_CAPABILITY_RESPONSE'
+        '403':
+          description: Forbidden.
+          schema:
+            $ref: '#/definitions/API_SDK_Error_default'
+  /qvrpro/camera/support:
+    get:
+      summary: Get all the supported cameras listed by its brand and model
+      description: |
+        Get all the supported cameras listed by its brand and model
+        ---
+
+        This API returns all the brands and models supported by QVR Pro. 
+        Response data is a JSON format data, which should be looked like below
+        ---
+
+            {
+              "success": true,
+              "brands": [{
+                "text":"3S",
+                "value": 0
+                "models":[{
+                    "text": "N1011",
+                    "value":"0000004D00000011"
+                  },
+                  {
+                    "text": "N1012",
+                    "value":"0000004D00000012"
+                  },
+                  {
+                    //Other supported models
+                    //...
+                  }]
+                },
+                {
+                  "brand":"VIVOTEK",
+                  "value": 144
+                  "models":[{
+                      "text": "BD5115",
+                      "value":"00000001003D0002"
+                    },
+                    {
+                      "text": "CC8130",
+                      "value": "00000001003E0002"
+                    },
+                    {
+                      //Other supported models
+                      //...
+                    }]
+                },
+                {
+                  //Other supported brands and its supported models
+                  //...
+                }]
+            }
+
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xB1000000|API version not support|
+        |0xB1000001|Authorization fail|
+        |0xB1000002|Insufficient permission|
+        |0xB1000003|Invalid request|
+        |0xB100001F|Get UMSID list fail|
+        |0xB1000021|Failed getting camera license info
+        |0xB1000022|Failed getting license domain info
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            API version. Supported versions are show at the top of this API
+            document.
+          in: query
+          required: true
+          type: string
+      tags:
+        - 'SDK Camera Settings'
+      responses:
+        '200':
+          description: >-
+            Called CGI successfully. A JSON object data shows the UMSUD of
+            cameras supported by QVR Pro.
+          schema:
+            $ref: '#/definitions/API_SDK_CAMERA_SUPPORT_RESPONSE'
+        '403':
+          description: Forbidden.
+          schema:
+            $ref: '#/definitions/API_SDK_Error_default'
+  '/qvrpro/camera/snapshot/{guid}':
+    get:
+      summary: Get a snapshot image from the camera.
+      description: |
+        Get a snapshot image from the camera.
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xB1000000|API version not support|
+        |0xB1000001|Authorization fail|
+        |0xB1000002|Insufficient permission|
+        |0xB1000003|Illegal parameter or missing of parameter|
+        |0xB1000004|Invalid request|
+        |0xB1000005|Error allocate memory|
+        |0xB1000006|Error getting snapshot|
+        |0xB1000021|Failed getting camera license info
+        |0xB1000022|Failed getting license domain info
+        |0xB1000023|Channel exceeds license support
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            API version. Supported versions are show at the top of this API
+            document.
+          in: query
+          required: true
+          type: string
+        - name: guid
+          description: >-
+            Unique identifier representing a specific channel. You can acquire
+            this value by using /camera/list API.
+          in: path
+          required: true
+          type: string
+      tags:
+        - 'SDK Camera Control'
+      responses:
+        '200':
+          description: A JPEG image acquiring from snapshot API.
+        '403':
+          description: Forbidden.
+          schema:
+            $ref: '#/definitions/API_SDK_Error_default'
+  '/qvrpro/camera/mrec/{guid}/{action}':
+    put:
+      summary: Start/stop recording the particular camera.
+      description: |
+        Start/stop recording the particular camera
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xB1000000|API version not support|
+        |0xB1000001|Authorization fail|
+        |0xB1000002|Insufficient permission|
+        |0xB1000003|Illegal parameter or missing of parameter|
+        |0xB1000004|Invalid request|
+        |0xB1000005|Error allocate memory|
+        |0xB1000021|Failed getting camera license info
+        |0xB1000022|Failed getting license domain info
+        |0xB1000023|Channel exceeds license support
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            API version. Supported versions are show at the top of this API
+            document.
+          in: query
+          required: true
+          type: string
+        - name: guid
+          description: >-
+            Unique identifier representing a specific channel. You can acquire
+            this value by using /camera/list API.
+          in: path
+          required: true
+          type: string
+        - name: action
+          description: start or stop recording (start|stop)
+          in: path
+          required: true
+          type: string
+      tags:
+        - 'SDK Camera Control'
+      responses:
+        '200':
+          description: >-
+            Called CGI successfully. A JSON object data shows the result of the
+            manual recording to a camera.
+          schema:
+            $ref: '#/definitions/API_SDK_CAMERA_MREC_RESPONSE'
+        '403':
+          description: Forbidden.
+          schema:
+            $ref: '#/definitions/API_SDK_Error_default'
+  '/qvrpro/camera/alarm/{guid}/{action}':
+    put:
+      summary: Start/stop alarm output to a particular camera.
+      description: |
+        Start/stop alarm output to a particular camera.
+        ---
+        You will know if a camera supports alram output feature by using API
+        "capability."You need to first set up camera's alarm output equipment in
+        order to use this API to trigger the equipment.
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xB1000000|API version not support|
+        |0xB1000001|Authorization fail|
+        |0xB1000002|Insufficient permission|
+        |0xB1000003|Illegal parameter or missing of parameter|
+        |0xB1000004|Invalid request|
+        |0xB1000005|Error allocate memory|
+        |0xB1000020|Send output cmd fail|
+        |0xB1000021|Failed getting camera license info
+        |0xB1000022|Failed getting license domain info
+        |0xB1000023|Channel exceeds license support
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            API version. Supported versions are show at the top of this API
+            document.
+          in: query
+          required: true
+          type: string
+        - name: guid
+          description: >-
+            Unique identifier representing a specific channel. You can acquire
+            this value by using /camera/list API.
+          in: path
+          required: true
+          type: string
+        - name: action
+          description: start or stop recording (start|stop)
+          in: path
+          required: true
+          type: string
+      tags:
+        - 'SDK Camera Control'
+      responses:
+        '200':
+          description: >-
+            Called CGI successfully. A JSON object data shows the result of
+            triggering an alarm to a camera.
+          schema:
+            $ref: '#/definitions/API_SDK_CAMERA_MREC_RESPONSE'
+        '403':
+          description: Forbidden.
+          schema:
+            $ref: '#/definitions/API_SDK_Error_default'
+  '/qvrpro/ptz/v1/channel_list/{guid}/ptz/action_list/{action_id}/invoke':
+    put:
+      summary: Move camera in different angle
+      description: >
+        Move camera in different angle <br>
+
+        If __action_id__ is "_start_move_" or "_stop_move_", a __direction__
+        value is added. e.g. "__sid=%s&direction=%s__," <br> 
+
+        where the value of __direction__ can be "_up", "down", "left", "right",
+        "up_left", "up_right", "down_left", "down_right", "zoom_in", "zoom_out",
+        "focus_far", "focus_near"_. <br>
+
+        If __action_id__ is not "_start_move_" nor "_stop_move_", only sid is
+        needed. e.g. "__sid=%s__".
+
+
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0x96020000|Success|
+
+        |0x96020001|Illegal parameter or missing of parameter|
+
+        |0x96020002|Channel locked|
+
+        |0x96020003|Operation fail |                        
+
+        |0x96020004|Authorization fail|
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: direction
+          description: >-
+            give PTZ camera direction value if continuous movement is requested.
+            Value should be _up, down, left, right, up_left, up_right,
+            down_left,  down_right, zoom_in, zoom_out, focus_far, focus_near_.
+          in: query
+          required: false
+          type: string
+        - name: guid
+          description: >-
+            Unique identifier representing a specific channel. You can acquire
+            this value by using /camera/list API.
+          in: path
+          required: true
+          type: string
+        - name: action_id
+          description: >-
+            Actions of PTZ camera, "up", "down", "left", "right", "up_left",
+            "up_right", "down_left", "down_right", "zoom_in", "zoom_out",
+            "focus_far", "focus_near", "start_move", "stop_move".
+          in: path
+          required: true
+          type: string
+      tags:
+        - 'SDK Camera PTZ'
+      responses:
+        '200':
+          description: >-
+            Called CGI successfully. A JSON object data shows the response of
+            control a PTZ camera.
+          schema:
+            $ref: '#/definitions/API_SDK_CAMERA_PTZ_SUCCESS_RESPONSE'
+  /qvrpro/logs/logs:
+    get:
+      summary: QVR Pro log
+      description: |
+        Get logs in QVR Pro.</br>
+        ---
+
+        CGI name: qvrpro log <br>
+        CGI Path{CGI}: {NAS_HOST}:{NAS_PORT}/qvrpro/logs/logs <br>
+        examples: 
+          1. $ curl -X GET http://{NAS_HOST}:{NAS_PORT}/qvrpro/logs/logs?sid=yr2m4bbe
+          2. $ curl -X GET http://{NAS_HOST}:{NAS_PORT}/qvrpro/logs/logs?sid=yr2m4bbe&sort_field=time&dir=DESC&start=0&max_result=20
+          3. $ curl -X GET http://{NAS_HOST}:{NAS_PORT}/qvrpro/logs/logs?sid=yr2m4bbe&sort_field=time&dir=ASC&start_time=1489126232000&end_time=1489131553000&channel_id=0,1&level=0
+        ---
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: log_type
+          description: |
+            The type of log.
+              1: System Events
+              2: System Connections
+              3: Surveillance Events  
+              4: Surveillance Connections
+              5: Surveillance Settings
+          in: query
+          required: false
+          type: number
+        - name: level
+          description: >
+            Log level
+            </br>                                                                                                         
+              0 : information,                   
+              1 : warning,
+              2 : error, (Multiple, split by ", ").
+            
+              specific user name to filter. if parameter not exist, API returns logs of all users.
+          in: query
+          required: false
+          type: string
+        - name: user
+          description: >-
+            specific user name to filter. if parameter not exist, API returns
+            logs of all user names.
+          in: query
+          required: false
+          type: string
+        - name: source_ip
+          description: >-
+            specific source IP to filter. if parameter not exist, API returns
+            logs of all source IPs.
+          in: query
+          required: false
+          type: string
+        - name: source_name
+          description: >-
+            specific source name to filter. if parameter not exist, API returns
+            logs of all source names.
+          in: query
+          required: false
+          type: string
+        - name: channel_id
+          description: >-
+            specific Channel id (Multiple, split by", ") to filter. if parameter
+            not exist, API returns logs of all Channel ids.
+          in: query
+          required: false
+          type: string
+        - name: global_channel_id
+          description: >-
+            specific Global channel id (Multiple, split by ", "). to filter. if
+            parameter not exist, API returns logs of all Global channel id
+            (guid).
+          in: query
+          required: false
+          type: string
+        - name: start_time
+          description: Timestamp of start time (millisecond). Use UTC time as the value.
+          in: query
+          required: false
+          type: number
+        - name: end_time
+          description: Timestamp of end time (millisecond). Use UTC time as the value.
+          in: query
+          required: false
+          type: number
+        - name: start
+          description: >-
+            Starting index of the acquiring logs. Default value is 0, which
+            acquires log from the beginning.
+          in: query
+          required: false
+          type: number
+        - name: max_results
+          description: 'Max number for response items, default: 10.'
+          in: query
+          required: false
+          type: number
+        - name: sort_field
+          description: >-
+            Choose the proper field to sort QVR Pro log. (field: log_id,
+            log_type, level, time, direction)
+          in: query
+          required: false
+          type: string
+        - name: dir
+          description: 'Sorting direction, value:ASC|DESC, default: DESC. '
+          in: query
+          required: false
+          type: string
+      tags:
+        - 'SDK Logs'
+      responses:
+        '200':
+          description: A list of information collected from a specific channel.
+          schema:
+            $ref: '#/definitions/API_SDK_LOGS_RESPONSE'
+  /qvrpro/streaming/getstream.cgi:
+    get:
+      summary: get live stream
+      description: >
+        Get live stream from QVR Pro.
+
+        ---
+
+        __Format of video frame__ </br> </br>
+
+        | Field name | Length (byte) | Description |
+
+        | -----------| ------ | ----------- |
+
+        | FourccCode | 4 | fourcc code, including qIVG, QIVG, qMP4, QMP4, QV3K,
+        QV6K, q264, Q264, qXPG |
+
+        | dwFlags | 4 | bit 0: 1 for key frame |
+
+        | dwWidth | 4 | frame width in pixel |
+
+        | dwHeight| 4 | frame height in pixel |
+
+        | llTimestamp | 8 | unit in milliseconds, elapses since 1970/1/1 |
+
+        | szOSDText | 24 | channel name, null terminated |
+
+        | addtionalHeaderSize | 4 |ã€€offsets between the original header and
+        media frame data |
+
+        | dwFrameDataSize | 4 | media frame size (excluding the header and the
+        additional header) |
+
+        | Frame data | dwFrameDataSize | Standard compressed raw data (ex.
+        H.264, MPEG-4â€¦) |
+
+        Note: All numeric data are stored in Little Endian. </br> </br>
+
+        __Format of audio frame__ </br> </br>
+
+        | Field name | Length (byte) | Description |
+
+        | -----------| ------ | ----------- |
+
+        | FourccCode | 4 | fourcc code, including G726, Q726, FAAC, G711, PCM,
+        0AAC, A711, QAAC |
+
+        | dwFlags | 4 | bit 0: 1 for key frame |
+
+        | dwWidth | 4 | frame width in pixel |
+
+        | dwHeight| 4 | frame height in pixel |
+
+        | llTimestamp | 8 | unit in milliseconds, elapses since 1970/1/1 |
+
+        | szOSDText | 24 | channel name, null terminated |
+
+        | dwReserved | 4 |ã€€offset to the beginning of media frame data = 0 |
+
+        | dwFrameDataSize | 4 | media frame size (excluding the header) |
+
+        | SamplingRate | 4 | sampling rate |
+
+        | BitsPerSample | 2 | bits per sample |
+
+        | Audio Channel Num | 2 | audio channel number |
+
+        | Audio Frame Data | dwFrameDataSize | audio frame data
+
+        Note: All numeric data are stored in Little Endian. </br> </br>
+
+
+        ***Error Code***
+
+        | Error code | Description |
+
+        | ---------- | ----------- |
+
+        | 0x93000000 | Illegal Args | 
+
+        | 0x93000001 | Reject Connection (DDOS)| 
+
+        | 0x93000002 | Exceed Max Connection no| 
+
+        | 0x93000003 | Stream is not ready| 
+
+        | 0x93000004 | Open Stream failed| 
+
+        | 0x93000005 | Auth failed| 
+
+        ---
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ch_sid
+          description: Unique identifier representing a specific channel (guid).
+          in: query
+          required: true
+          type: string
+        - name: stream_id
+          description: >-
+            stream id. You can get this parameter value from API
+            "/qvrpro/camera/list"
+          in: query
+          required: true
+          type: integer
+      tags:
+        - 'SDK Live Streaming'
+      responses:
+        '200':
+          description: >-
+            0\n  </br> [media_frame] =>
+            |VIDEO_HEADER|VIDEO_FRAME_DATA|AUDIO_HEADER|AUDIO_FRAME_DATA|...|
+  /qvrpro/apis/qplay.cgi:
+    get:
+      summary: playback
+      description: >
+        This CGI (qplay.cgi) contains several commands to fulfill QVR Pro
+        playback feature.</br>
+
+        ---
+
+        CGI name: qplay.cgi </br>
+
+        CGI Path{CGI}: {NAS_HOST}:{NAS_PORT}/qvrpro/apis/qplay.cgi </br>
+
+        --- ---
+
+
+        **How to get recording stream**
+
+        | Step 1 : get session_id |
+
+        |  ---------------------- |
+            $ curl -X GET
+            http://10.77.89.123:8080/qvrpro/apis/qplay.cgi?ver=v1&cmd=open&sid=2cqyopg&ch_sid=8FBC58E2F7274AF3B6F6761E90FB0001&query_type=0&start_time=1490068112000&recording_type=0&stream=0&data_type=1
+        ---
+
+        | Step 2 : seek time |
+
+        |  ----------------- |
+            $ curl -X GET
+            http://10.77.89.123:8080/qvrpro/apis/qplay.cgi?ver=v1&cmd=seek&session=8FBC58E2F7274AF3B6F6761E90FB0001&seek_time=1490072112000 
+        ---
+
+        | Step 3 : play |
+
+        |  ----------------- |
+            $ curl -X GET 
+            http://10.77.89.123:8080/qvrpro/apis/qplay.cgi?ver=v1&cmd=play&session=8FBC58E2F7274AF3B6F6761E90FB0001&speed=100
+        ---
+
+        | Step 4 : get data |
+
+        |  ----------------- |
+            $ curl -X GET
+            http://10.77.89.123:8080/qvrpro/apis/qplay.cgi?ver=v1&cmd=get&session=8FBC58E2F7274AF3B6F6761E90FB0001
+        ---
+
+        <br> Followings are the step details of the qplay.cgi </br>
+
+        __1. Starting playback session__ </br>
+
+        Method: __GET__ </br>
+
+        HTTP Request: </br>
+
+        _{CGI}?ver=v1&cmd=open&sid={auth_sid}&ch_sid={channel_sid}&query_type={query_type}&start_time={start_time}&end_time={end_time}&recording_type={recording_type}&stream_id={stream_id}&alarm_stream_id={alarm_stream_id}&data_type={data_type}_
+        </br>
+
+        <br> ***Request parameters***
+
+        | Parameter name | Type | Description |
+
+        | -------------- | ---- | ----------- |
+
+        | auth_sid    | string  | Getting sid and login QVR Pro with sid. |
+
+        | channel_sid | string  | Unique identifier representing a specific
+        channel. |
+
+        | query_type  | Integer | 0 : Play recording file by time (replace Time
+        period and Normal recording file) |
+
+        | start_time/end_time | Integer | UTC time(ms) |
+
+        | recording_type | integer | 0: All recording file
+        </br>                                                                           
+        1: Only alarm file
+        </br>                                                                              
+        2: Normal recording file |
+
+        | stream_id/alarm_stream_id | Integer | 0, 1: stream 1 recording data
+        </br>                                                                   
+        2: stream 2 recording data
+        </br>                                                                       
+        3: stream 3 recording data
+        </br>                                                                       
+        16: no stream id
+        </br>                                                                                
+        255: all stream recording data |
+
+        | data_type | Integer | 0: JPEG (default), only key frame transcode to
+        jpeg format </br>                                        1: source
+        format of recording files | </br>
+
+        <br> __*Response*__ </br>
+
+
+        | Property name | Value | Description |
+
+        | ------------- | ---- | ----------- |
+
+        | return_code | integer | 0: success, smaller than 0: failed |
+
+        | session_id  | string  | sent if successful (30 bytes string) |
+
+        ---
+
+        <br>
+
+        __2. Playback session control__ </br> </br>
+
+        Method: __GET__ </br>
+
+        HTTP Request: </br>
+
+        _{CGI}?ver=v1&cmd={command}&session={session_id}&seek_time={seek_time}&speed={speed}&enable={enable_val}_
+        </br> </br>
+
+        The value of {command} are describe below:
+
+        | Value | Description   |
+
+        | ----- | -----------   |
+
+        | close | close session |
+
+        | play  | play file     |
+
+        | pause | pause file    |
+
+        | live  | live report   |
+
+        | seek  | seek time, argument seek_time should be specified, the valid
+        value is UTC time(ms) |
+
+        | ff    | forward playing |
+
+        | rew   | rewind playing  |
+
+        | speed | speed control, argument speed should be specified |
+
+        | prev_frame | get previous frame |
+
+        | next_frame | get next frame |
+
+        | all_frame  | play all frame mode |
+
+        | skip_frame | play only key frame mode on fast speed playing |
+
+        | timecontrol | frame time control, argument enable should be specified
+        |
+
+        | playclose |auto play end close, argument enable should be specified|
+
+
+        <br> ***Request parameters***
+
+        | Parameter name | Type | Description |
+
+        | -------------- | ---- | ----------- |
+
+        | speed | integer | 1~160 : forward speed, from 1 to 16 times (speed /
+        10)|
+
+        | enable_val | integer | cmd=**timecontrol**
+        </br>                                                                             
+        enable=0 - disable frame time control
+        </br>                                                           
+        enable=1 - (default), enable frame time control </br>
+        </br>                                            cmd=**playclose**
+        </br>                                                                               
+        enable=0 - disable play end close session
+        </br>                                                        enable=1 -
+        (default), enable play end close session </br> |
+
+        | session_id | string  | session id |
+
+        | seek_time  |         | cmd=**seek**
+        </br>                                                                                    
+        the UTC time (ms) want to goto 
+
+        ---
+
+        <br> __*Response*__ </br>
+
+
+        | Property name | Value | Description |
+
+        | ------------- | ---- | ----------- |
+
+        | return_code | integer | 0: success, smaller than 0: failed |
+
+        ---
+
+        <br>
+
+        __3. Playback data retrieval__ </br> </br>
+
+        Method: __GET__ </br>
+
+        HTTP Request: </br>
+
+        _{CGI}?ver=v1&cmd=get&session={session_id}_ </br>
+
+
+        <br> ***Request parameters***
+
+        | Parameter name | Type | Description |
+
+        | -------------- | ---- | ----------- |
+
+        | session_id | string | session id |
+
+        ---
+
+        <br> __*Response*__ </br>
+
+
+        | Property name | Value | Description |
+
+        | ------------- | ---- | ----------- |
+
+        | return_code | integer | 0: success, smaller than 0: failed |
+
+        | media frame | string | describe below 
+            1. If data_type(parameter in Step 1) is '0'(JPEG)
+              The frame is only video frame
+              ---
+              [channel_name]\n
+              [timestamp]\n // in UTC time format
+              [jpeg image length]\n // INT
+              [jpeg data] // BINARY, binary data of length [jpeg image length]
+              ---
+            2. If data_type(parameter in Step 1) is 1(Source format of recording files)
+              A [media frame] is either a video or an audio frame. The format of [media
+              frame] is the same as the description in API "Live Streaming"
+        ---
+
+        <br>
+
+        ***Error Code***
+
+        | QVR Pro Error Code | Description |
+
+        | ------------- | ----------- |
+
+        | 0x93010002 | open qplay session failed|
+
+        | 0x93010006 | sid authentication failed|
+
+        | 0x93010007 | open session failed (session num full)|
+
+        | 0x93010102 | start_time, end_time or time_val not specified|
+
+        | 0x93010103 | channel_id not specified|
+
+        | 0x93010104 | session_id not specified| 
+
+        | 0x93010107 | seek_time not specified| 
+
+        | 0x93010108 | session_id too long| 
+
+        | 0x93010109 | speed_num not specified| 
+
+        | 0x9301010B | enable not specified| 
+
+        | 0x93010201 | controlling stream failed| 
+
+        | 0x93010202 | session not found| 
+
+        | 0x93010203 | session is being closed| 
+
+        | 0x93010204 | seek no file | 
+
+        | 0x93010003 | cmd is illegal|
+
+        | 0x93010004 | insufficient memory |
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: ver
+          description: >-
+            qplay CGI version. Since this is a legacy CGI. This version is not
+            the same as the other API like "list", "capability", ...,etc. The
+            value should be set to "v1" unless there is a new version of
+            "qplay.cgi". At that time, this document will also be updated to
+            support the new version of "qplay.cgi"
+          in: query
+          required: true
+          type: string
+        - name: cmd
+          description: >-
+            qplay CGI commands. Detail values of "cmd" see Step 2 "Playback
+            session control"
+          in: query
+          required: true
+          type: string
+        - name: ch_sid
+          description: >-
+            Unique identifier representing a specific channel. You can acquire
+            this value by using /camera/list API.
+          in: query
+          required: false
+          type: string
+        - name: query_type
+          description: >
+            0 : Play recording file by time </br> (replace Time period and
+            Normal recording file)
+          in: query
+          required: false
+          type: integer
+        - name: start_time
+          description: UTC time(ms)
+          in: query
+          required: false
+          type: integer
+        - name: end_time
+          description: UTC time(ms)
+          in: query
+          required: false
+          type: integer
+        - name: recording_type
+          description: >
+            0: All recording file </br> 1: Only alarm file </br> 2: Normal
+            recording file
+          in: query
+          required: false
+          type: integer
+        - name: stream_id
+          description: >
+            1: stream 1 recording data </br> 2: stream 2 recording data </br> 3:
+            stream 3 recording data </br> 16: no stream id </br> 255: all stream
+            recording data
+          in: query
+          required: false
+          type: integer
+        - name: data_type
+          description: >
+            0: JPEG (default), only key frame transcode to jpeg format </br> 1:
+            source format of recording files
+          in: query
+          required: false
+          type: integer
+        - name: speed
+          description: |
+            1~160 : forward speed, from 1 to 16 times (speed / 10)
+          in: query
+          required: false
+          type: integer
+        - name: enable_val
+          description: >
+            If cmd=timecontrol </br> enable=0 - disable frame time control</br>
+            enable=1 - (default), enable frame time control</br></br> If
+            cmd=playclose</br> enable=0 - disable play end close session</br>
+            enable=1 - (default), enable play end close session</br> For more
+            detail of the value of "cmd", please refer to step 2 "Playback
+            session control"
+          in: query
+          required: false
+          type: integer
+        - name: session
+          description: session id
+          in: query
+          required: false
+          type: string
+        - name: seek_time
+          description: >
+            If cmd=seek, this parameter has to be set.</br> This is parameter
+            gives the UTC time (ms) you want to go to.
+          in: query
+          required: false
+          type: integer
+      tags:
+        - 'SDK Playback'
+      responses:
+        '200':
+          description: OK
+  /qvrpro/qshare/StreamingOutput/channels:
+    get:
+      summary: Return a list of all channels' infomation in QVR Pro.
+      description: >
+        This API returns a list of all channels' information in QVR Pro,
+        containing channel ID, name, brand, and model. Sid is neccesary
+        parameter for API verification.
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+      tags:
+        - 'Streaming Output: Channel list'
+      responses:
+        '200':
+          description: A list of channels' infomation
+          schema:
+            $ref: '#/definitions/API_SO_channels'
+        '401':
+          description: Authentication is failed.
+          schema:
+            $ref: '#/definitions/API_SO_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qshare/StreamingOutput/channel/{guid}/streams:
+    get:
+      summary: Return a list of information from a specific channel.
+      description: >
+        This API takes you discovering a specific channel in detail, which gives
+        the video codec, quality, resolution, frame_rate of the specific
+        channel. Sid is neccesary parameter for API verification.
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: guid
+          description: Unique identifier representing a specific channel.
+          in: path
+          required: true
+          type: string
+      tags:
+        - 'Streaming Output: Streams'
+      responses:
+        '200':
+          description: A list of infomation collected from a specific channel.
+          schema:
+            $ref: '#/definitions/API_SO_streams'
+        '401':
+          description: Authentication is failed.
+          schema:
+            $ref: '#/definitions/API_SO_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qshare/StreamingOutput/channel/{guid}/stream/{stream}/liveStream:
+    post:
+      summary: >-
+        A livestream resource, a stream of a channel in QVR Pro, is available
+        for users to access through RTMP or HLS.
+      description: >-
+        The liveStream API returns a resource URI based on the incoming
+        parameter which are the guid and stream ID a user wants to access. A
+        user can select either HLS or RTMP as the resource protocol.
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: guid
+          description: Unique identifier representing a specific channel.
+          in: path
+          required: true
+          type: string
+        - name: stream
+          description: Stream ID.
+          in: path
+          required: true
+          type: number
+        - name: request
+          description: Request body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_SO_liveStream_POST_request_body'
+      tags:
+        - 'Streaming Output: Live stream'
+      responses:
+        '200':
+          description: Return stream status and its URI.
+          schema:
+            $ref: '#/definitions/API_SO_liveStream_POST'
+        '401':
+          description: Streaming Out API sid invalid.
+          schema:
+            $ref: '#/definitions/API_SO_Error_default'
+        '404':
+          description: Page not found.
+          schema:
+            $ref: '#/definitions/API_SO_Error_default'
+        '409':
+          description: Specific stream resource has been published.
+          schema:
+            $ref: '#/definitions/API_SO_Error_default'
+        '500':
+          description: Internal server error.
+    delete:
+      summary: >-
+        A livestream resource, a stream of a channel in QVR Pro, is available
+        for users to access through RTMP or HLS.
+      description: >-
+        This API deletes a published stream, hence it's URI is not able to
+        access anymore.
+      parameters:
+        - name: sid
+          description: QTS session ID. You can grant it from QTS login CGI.
+          in: query
+          required: true
+          type: string
+        - name: guid
+          description: Unique identifier representing a specific channel.
+          in: path
+          required: true
+          type: string
+        - name: stream
+          description: Stream ID.
+          in: path
+          required: true
+          type: number
+        - name: token
+          description: >-
+            Streaming token wanted to delete. You can grant it from the sharing
+            URI you create. RTMP: http://${DOMAIN}:${PORT}/live/${TOKEN}, HLS:
+            http://${DOMAIN}:${PORT}/hls/${TOKEN}.m3u8
+          in: body
+          schema:
+            $ref: '#/definitions/API_SO_liveStream_DELETE_request_body'
+      tags:
+        - 'Streaming Output: Live stream'
+      responses:
+        '204':
+          description: Successfully deletes specific URI resource.
+        '401':
+          description: Streaming Out API sid invalid.
+          schema:
+            $ref: '#/definitions/API_SO_Error_default'
+        '404':
+          description: Given GUID or stream ID not exist.
+          schema:
+            $ref: '#/definitions/API_SO_Error_default'
+        '500':
+          description: Internal server error.
+        default:
+          description: Error Response
+          schema:
+            $ref: '#/definitions/API_SO_Error_default'
+  /qvrpro/qvrip/Vault/checkVaultName:
+    get:
+      summary: Check whether the vault_name has been used.
+      description: |
+        This API provide user to check whether the vault_name has been used.
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xC4000003|missing parameter|
+        |0xC4000004|invalid argument|
+        |0xC4000005|authorization fail|
+        |0xC4000200|connect to database failed|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: vault_name
+          description: Vault name you want to check
+          in: query
+          required: true
+          type: string
+        - name: original_name
+          description: Original Vault name. The check will ignore this name.
+          in: query
+          type: string
+      tags:
+        - 'Metadata Vault: Vault'
+      responses:
+        '200':
+          description: Return QVR Pro net information
+          schema:
+            $ref: '#/definitions/Response_checkVaultName'
+        '400':
+          description: 'Missing paramater, wrong json format or incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Vault/addVault:
+    post:
+      summary: Create Vault
+      description: >
+        This API provide user to create Vault. You can setting parameters like
+        vault name and  description of Vault when you create it. Vault type
+        decide what kind of vault will be created, so please fill in "GENERIC"
+        to create generic type Vault.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+
+        |0xC4000200|connect to database failed|
+
+        |0xC4010000|vault already exist|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: request
+          description: Request body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_addVault_POST_request_body'
+      tags:
+        - 'Metadata Vault: Vault'
+      responses:
+        '200':
+          description: Return event-path if vault type is 'Generic'
+          schema:
+            $ref: '#/definitions/Response_addVault_general_type'
+        '400':
+          description: 'Missing paramater, wrong json format or incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Vault/removeVault:
+    post:
+      summary: Remove Vault
+      description: >
+        This API pro vide user to remove Vault. The vault_id of removed Vault
+        will be invalid. You can't saving Metadata to removed Vault.  The
+        Metadata belong removed Vault will be retained, you can still query it.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+
+        |0xC4000200|connect to database failed|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: request
+          description: Request body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_removeVault_POST_request_body'
+      tags:
+        - 'Metadata Vault: Vault'
+      responses:
+        '200':
+          description: Return executed result.
+          schema:
+            type: object
+            properties:
+              ReturnStatus:
+                type: object
+                properties:
+                  statusCode:
+                    type: integer
+                    description: >-
+                      The code to represent Executing status, please reference
+                      Error Code List of the API.
+                    example: 0
+                  statusString:
+                    type: string
+                    description: The desciption to represent Executing status.
+                    example: OK
+                  extra:
+                    type: object
+                    properties:
+                      fail_list:
+                        type: array
+                        description: List of invalid vault_id which user fill in.
+                        items:
+                          type: string
+                          example:
+                            - ID87A33BECBF5F4DA1B18A8C4FD7787640
+                            - IDB971347C0BB94681B23F1B2120668B8C
+        '400':
+          description: 'Missing paramater, wrong json format or incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Vault/modifyVault:
+    put:
+      summary: Modify Vault
+      description: >
+        This API provide user to modify Vault settings. You can set Vault name,
+        desciption, enable status and binded channels.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+
+        |0xC400000E|invalid channel or need channel license|
+
+        |0xC4000200|connect to database failed|
+
+        |0xC4010001|vault is not exist|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: request
+          description: Request body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_modifyVault_POST_request_body'
+      tags:
+        - 'Metadata Vault: Vault'
+      responses:
+        '200':
+          description: Return executed result.
+          schema:
+            $ref: '#/definitions/Response_addVault_general_type'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Vault/getVaultList:
+    get:
+      summary: Get all Vault information.
+      description: >
+        This API provide user to get all Vault information. If you don't appoint
+        vault type, the API response all Vaults with any type.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+
+        |0xC4000200|connect to database failed|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: type
+          type: string
+          description: >-
+            Vault type which want to get, get all types vault if it doesn't
+            exist
+          in: query
+          required: false
+      tags:
+        - 'Metadata Vault: Vault'
+      responses:
+        '200':
+          description: Return all vaults.
+          schema:
+            $ref: '#/definitions/Response_getVaultList'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  '/qvrpro/qvrip/Vault/getVaultInfo/{vault_id}':
+    get:
+      summary: Get target vault information.
+      description: |
+        This API provide user to get target vault information.
+        ---
+        ***Error Code***
+        |Error code|Description|
+        |-|-|
+        |0xC4000002|missing request body|
+        |0xC4000003|missing parameter|
+        |0xC4000004|invalid argument|
+        |0xC4000005|authorization fail|
+        |0xC400000A|insufficient permissions|
+        |0xC4000200|connect to database failed|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: vault_id
+          description: vault key. API will get information of vault with this key.
+          in: path
+          required: true
+          type: string
+      tags:
+        - 'Metadata Vault: Vault'
+      responses:
+        '200':
+          description: Return target vault.
+          schema:
+            $ref: '#/definitions/Response_getVaultInfo'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Filter/modifyFilter:
+    post:
+      summary: Modify filter.
+      description: >
+        This API provide user to modify filter settings. Every Vault can have
+        one filter. Filter contain one to many rules. By different rule type,
+        rule can hide string or replace string with newline or another string.
+        The filter setting will be overwite by new settings.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+
+        |0xC4000200|connect to database failed|
+
+        |0xC4010001|vault is not exist|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: request
+          description: Request body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_modifyFilter_POST_request_body'
+      tags:
+        - 'Metadata Vault: Filter'
+      responses:
+        '200':
+          description: Return executed result.
+          schema:
+            $ref: '#/definitions/Response_no_extra'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Filter/testFilter:
+    post:
+      summary: Preview filtering result
+      description: >
+        This API provide user to preview filtering result. Provide rule_list and
+        metadata sting which want to filter, API will response the filtered
+        metadata string.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: request
+          description: Request body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_testFilter_POST_request_body'
+      tags:
+        - 'Metadata Vault: Filter'
+      responses:
+        '200':
+          description: Return executed result.
+          schema:
+            $ref: '#/definitions/Response_testFilter'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Filter/recvTestData:
+    post:
+      summary: Receive test metadata.
+      description: >
+        This API provide user to receive test metadata. After you call the API,
+        it will wait for target vault receiving metadata. When Vault received
+        metadata, API responses the same metadata to user.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+
+        |0xC4000502|socket connection fail|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: token
+          type: string
+          description: The token to verify the connection(30 UTF-8 characters).
+          in: query
+          required: true
+        - name: request
+          description: Request body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_recvTestData_POST_request_body'
+      tags:
+        - 'Metadata Vault: Filter'
+      responses:
+        '200':
+          description: Return executed result.
+          schema:
+            $ref: '#/definitions/Response_recvTestData'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Filter/stopRecvData:
+    delete:
+      summary: Stop receiving test metadata
+      description: >
+        This API provide user to stop receining test metadata.If user want to
+        stop waiting receing test metadata, User can cancle the request and call
+        this API with the token which was defined in recvTestData to stop
+        receiving test metadata.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+
+        |0xC4000502|socket connection fail|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: token
+          type: string
+          description: The token of connection.
+          in: query
+          required: true
+      tags:
+        - 'Metadata Vault: Filter'
+      responses:
+        '200':
+          description: Return executed result.
+          schema:
+            $ref: '#/definitions/Response_no_extra'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  '/qvrpro/qvrip/Event/recvNotify/Generic/{vault_id}':
+    post:
+      summary: Saving metadata
+      description: >
+        This API provide user to save metadata. Metadata can be JSON data in API
+        defined format or any UTF-8 encoded string. Becase this API can be
+        executed without sid, please keep the key(vault_id) safe. For suggest,
+        user can use white/black list funcion in QTS to avoid unknown source
+        saving metadata.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC400000E|invalid channel or need channel license|
+
+        |0xC4000200|connect to database failed|
+
+        |0xC4010001|vault is not exist|
+
+        |0xC4010006|unknown vault type|
+
+        |0xC4010007|unknown connection type|
+      parameters:
+        - name: vault_id
+          description: vault key. API will save metadata to vault with this key.
+          in: path
+          required: true
+          type: string
+        - name: request
+          description: 'Request body, standard notify format.'
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_recvNotify_POST_request_body'
+      tags:
+        - 'Metadata Vault: Event'
+      responses:
+        '200':
+          description: Return executed result.
+          schema:
+            $ref: '#/definitions/Response_no_extra'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+  /qvrpro/qvrip/Metadata/Query:
+    post:
+      summary: Query metadata
+      description: >
+        This API provide user to query metadata. Every querying condition are
+        optional. API response result which matched every condition.
+
+        ---
+
+        ***Error Code***
+
+        |Error code|Description|
+
+        |-|-|
+
+        |0xC4000002|missing request body|
+
+        |0xC4000003|missing parameter|
+
+        |0xC4000004|invalid argument|
+
+        |0xC4000005|authorization fail|
+
+        |0xC400000A|insufficient permissions|
+
+        |0xC4000200|connect to database failed|
+      parameters:
+        - name: sid
+          description: >-
+            QTS session ID, for API authorization, which can grant it from QTS
+            Login CGI.
+          in: query
+          required: true
+          type: string
+        - name: start
+          in: query
+          description: 'Skip first N number of results. (default:0)'
+          type: integer
+        - name: limit
+          in: query
+          description: 'Return N number of results. (default:20, max:100)'
+          type: integer
+        - name: timeout
+          in: query
+          description: 'Timeout. (default:120, max:600, unit:second)'
+          type: integer
+        - name: request
+          description: Request body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/API_queryMetadata_POST_request_body'
+      tags:
+        - 'Metadata Vault: Metadata'
+      responses:
+        '200':
+          description: Return metadata which was found.
+          schema:
+            $ref: '#/definitions/Response_queryMetadata'
+        '400':
+          description: 'Missing paramater, wrong json format or any incorrect input data'
+          schema:
+            $ref: '#/definitions/Error_400'
+        '401':
+          description: Authentication failed.
+          schema:
+            $ref: '#/definitions/API_metadata_Error_default'
+        '500':
+          description: Internal server error.
+definitions:
+  API_SDK_CAMERA_SEARCH_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+      data:
+        type: array
+        items:
+          type: object
+          properties:
+            umsid:
+              type: string
+              description: Umsid.
+              example: 000000030000004B
+            address:
+              type: string
+              description: Camera IP address.
+              example: 10.64.104.7
+            vender:
+              type: string
+              description: Camera vender.
+              example: AXIS
+            model:
+              type: string
+              description: Camera model.
+              example: Q1602
+            mac_addr:
+              type: string
+              description: Camera MAC address.
+              example: '00:40:8c:c5:80:b8'
+            port:
+              type: number
+              description: Camera port.
+              example: 80
+      counter:
+        type: number
+        description: Total camera number.
+        example: 1
+  API_SDK_CAMERA_MREC_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: true
+  API_SDK_CAMERA_TEST_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: true
+  API_SDK_CAMERA_STATUS_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+      data:
+        type: array
+        items:
+          type: object
+          properties:
+            channel_index:
+              type: number
+              description: >-
+                Index of the channel of QVR Pro. Value starts from 0~127
+                (ch1~ch128)
+              example: 0
+            name:
+              type: string
+              description: Name of the channel.
+              example: AXIS_P1355
+            umsid:
+              type: string
+              description: UMSID of the camera.
+              example: 000000030000006E
+            guid:
+              type: string
+              description: >-
+                Unique identifier representing a specific channel. You can
+                acquire this value by using /camera/list API.
+              example: 00089BFA517D00089BFA517D00080000
+            brand:
+              type: string
+              description: Camera brand of the channel.
+              example: AXIS
+            model:
+              type: string
+              description: Camera model of the channel.
+              example: P1355
+            mac:
+              type: number
+              description: Channel MAC address.
+              example: '00:40:8C:F4:79:4D'
+            ver:
+              type: string
+              description: >-
+                Camera version acquiring from the camera. If there is no such
+                info in the camera. the value is "".
+              example: 5.60.1
+            ip:
+              type: string
+              description: Camera IP.
+              example: 10.64.104.79
+            port:
+              type: string
+              description: Camera port.
+              example: '80'
+            video_codec_setting:
+              type: string
+              description: Camera codec.
+              example: H.264
+            video_resolution_setting:
+              type: number
+              description: Channel resolution.
+              example: 800x450
+            frame_rate_setting:
+              type: string
+              description: camera frame rate.
+              example: FULL
+            video_quality_setting:
+              type: string
+              description: video quality.
+              example: Compression 30
+            stream_state:
+              type: array
+              items:
+                type: object
+                properties:
+                  stream:
+                    type: number
+                    description: Stream id.
+                    example: 0
+                  enable_normal_recording:
+                    type: number
+                    description: Enable normal recording.
+                    example: 0
+                  enable_alarm_recording:
+                    type: number
+                    description: Enable alarm recording.
+                    example: 1
+                  video_codec_setting:
+                    type: string
+                    description: Video codec setting.
+                    example: H.264
+                  video_resolution_setting:
+                    type: string
+                    description: Video resolution setting.
+                    example: 800x450
+                  frame_rate_setting:
+                    type: string
+                    description: Frame rate setting.
+                    example: Full
+                  video_quality_setting:
+                    type: string
+                    description: Video quality setting.
+                    example: Compression 30
+                  status:
+                    type: string
+                    description: >-
+                      Stream status. Possible status are "NVR_CAM_CONNECTED",
+                      "NVR_CAM_CONNECTION_ERROR",  "NVR_CAM_CONNECTING",
+                      "NVR_CAM_CONNECT_IDLE", "NVR_CAM_DISCONNECTED",
+                      "NVR_CAM_NON_LICENSED", and "NVR_CAM_UNDEFINED".
+                    example: NVR_CAM_CONNECT_IDLE
+                  rec_state:
+                    type: string
+                    description: >-
+                      Record state. Possible status are "RECORDING",
+                      "NOT_SETTING", "NOT_RECORDING", and "RECORDING_WITH_SPARE"
+                      (recording with spare space).
+                    example: NOT_RECORDING
+                  rec_state_err_code:
+                    type: number
+                    description: >-
+                      Shows the error code if there exist some error in each
+                      recording status.
+                    example: 0
+                  frame_rate:
+                    type: string
+                    description: Camera frame rate.
+                    example: '0'
+                  bit_rate:
+                    type: number
+                    description: Camera bit rate.
+                    example: 0
+            status:
+              type: string
+              description: >-
+                Stream status. Possible status are "NVR_CAM_CONNECTED",
+                "NVR_CAM_CONNECTION_ERROR",  "NVR_CAM_CONNECTING",
+                "NVR_CAM_CONNECT_IDLE", "NVR_CAM_DISCONNECTED",
+                "NVR_CAM_NON_LICENSED", and "NVR_CAM_UNDEFINED". This key
+                represents the recording stream. If the camera is a single
+                stream camera, its stream info also shows here.
+              example: NVR_CAM_CONNECTED
+            rec_state:
+              type: string
+              description: >-
+                Record state. Possible status are "RECORDING", "NOT_SETTING",
+                "NOT_RECORDING", and "RECORDING_WITH_SPARE" (recording with
+                spare space). This key represents the recording stream. If the
+                camera is a single stream camera, its stream info also shows
+                here.
+              example: RECORDING
+            rec_state_err_code:
+              type: number
+              description: >-
+                Record state error code. This key represents the recording
+                stream. If the camera is a single stream camera, its stream info
+                also shows here.
+              example: 0
+            frame_rate:
+              type: string
+              description: >-
+                Camera frame rate. This key represents the recording stream. If
+                the camera is a single stream camera, its stream info also shows
+                here.
+              example: '30'
+            bit_rate:
+              type: number
+              description: >-
+                Camera bit rate. This key represents the recording stream. If
+                the camera is a single stream camera, its stream info also shows
+                here.
+              example: 167418
+      total_channel_num:
+        type: number
+        description: Total channel number
+        example: 128
+  API_SDK_CAMERA_CAPABILITY_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: true
+      camera_motion:
+        type: array
+        description: shows which guid (camera) supports which kind of the camera motion
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Event name (Motion Detection)
+              example: Motion Detection
+            index:
+              type: number
+              description: Motion index.
+              example: 0
+            guids:
+              description: Supported guids.
+              type: array
+              items:
+                type: string
+                example: 00089BFA517D00089BFA517D00080000
+      motion_manual:
+        description: >-
+          shows which guid (camera) that you need to set motion function
+          manually at the camera config website
+        type: array
+        items:
+          type: string
+          example: null
+      alarm_input:
+        type: array
+        description: shows which guid (camera) supports which kind of the alarm input mode
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Event name (Alarm Input)
+              example: Alarm Input
+            index:
+              type: number
+              description: >-
+                This parameter represents the alarm input index (0~7) defined in
+                each camera (1~8). e.g. If a camera has two kinds of alarm input
+                (alarm input 1, 2), you can find its guid in index 0 and 1.
+            guids:
+              description: Supported guids.
+              type: array
+              items:
+                type: object
+                properties:
+                  guid:
+                    type: string
+                    description: guid
+                    example: 00089BFA517D00089BFA517D00080000
+                  status:
+                    type: string
+                    description: alarm status defined by the camera.
+                    example: Active
+      alarm_input_manual:
+        type: array
+        description: >-
+          shows which guid (camera) that you need to set alarm input function
+          manually at the camera config website
+        items:
+          type: string
+          example: null
+      alarm_pir:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Event name (PIR Detection)
+            example: PIR Detection
+          guids:
+            type: array
+            description: Guids
+            items:
+              type: string
+              example: null
+      alarm_pir_manual:
+        type: array
+        description: >-
+          shows which guid (camera) that you need to set alarm pir function
+          manually at the camera config website
+        items:
+          type: string
+          example: null
+      alarm_output:
+        type: array
+        description: shows which guid (camera) supports which kind of the alarm output mode
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Event name (Alarm Output)
+              example: Alarm Output
+            guid:
+              type: string
+              description: guid
+              example: 00089BFA517D00089BFA517D00080000
+            support_method:
+              type: number
+              description: >-
+                0 or 1, shows that if the camera is able to set Hi/Lo status by
+                the user. (Some of the cameras can not by set by user.)
+              example: 1
+            output_type:
+              type: array
+              description: 'alarm output type. 0:Lo/Inactive, 1:Hi/Active'
+              items:
+                type: object
+                properties:
+                  index:
+                    type: number
+                    description: output type index number
+                    example: 0
+                  type:
+                    type: number
+                    description: output type number
+                    example: 0
+      iva_crossline_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Cross Line)
+            example: Cross Line
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: null
+      iva_audio_detected_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Audio Detection)
+            example: Audio Detection
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: 00089BFA517D00089BFA517D00080000
+      iva_tampering_detected_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Tampering Detection)
+            example: Tampering Detection
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: 00089BFA517D00089BFA517D00080000
+      iva_intrusion_detected:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Intrusion Detection)
+            example: Intrusion Detection
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: null
+      iva_intrusion_detected_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Intrusion Detection)
+            example: Intrusion Detection Manual
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: null
+      iva_digital_autotrack_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Digital Autotracking)
+            example: Digital Autotracking
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: null
+      cameraControl:
+        type: array
+        description: shows which guid (camera) supports PTZ function
+        items:
+          type: object
+          properties:
+            guids:
+              type: array
+              description: guids
+              items:
+                type: object
+                properties:
+                  guid:
+                    type: string
+                    description: guid
+                    example: 00089BFA517D00089BFA517D00080003
+                  support_preset_points:
+                    type: boolean
+                    description: shows if this guid (camera) supports PTZ function.
+                    example: true
+  API_SDK_CAMERA_SUPPORT_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: true
+      brands:
+        type: array
+        items:
+          type: object
+          properties:
+            text:
+              type: string
+              description: camera brand
+              example: 3S
+            value:
+              type: number
+              description: supported brand index
+              example: 0
+            models:
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    description: camera model
+                    example: N1011
+                  value:
+                    type: string
+                    description: camera model UMSID
+                    example: 0000004D00000011
+  API_SDK_CAMERA_PTZ_SUCCESS_RESPONSE:
+    type: object
+    properties:
+      error_code:
+        type: string
+        example: '0x0'
+      error_message:
+        type: string
+        example: Success
+  API_SDK_CAMERA_PTZ_FAIL_RESPONSE:
+    type: object
+    properties:
+      error_code:
+        type: string
+        example: '0x96020004'
+      error_message:
+        type: string
+        example: Auth Fail
+  API_SDK_LOGS_RESPONSE:
+    type: object
+    properties:
+      code:
+        type: integer
+        description: Status code.
+        example: 200
+      mesg:
+        type: string
+        description: Result description
+        example: OK
+      item:
+        type: array
+        items:
+          type: object
+          properties:
+            UTC_time:
+              type: integer
+              description: UTC_time.
+              example: 1444436555000
+            log_type:
+              type: integer
+              description: >-
+                1: Surveillance Settings 2: Surveillance Events 3: Surveillance
+                Connection 4: System Events 5: System Connection
+              example: 6
+            log_id:
+              type: integer
+              description: 'serial number '
+              example: 6234
+            level:
+              type: integer
+              description: log level
+              example: 1
+            time:
+              type: string
+              description: date time
+              example: '2017-03-08 00:00:00'
+            timezone:
+              type: string
+              description: timezone of system
+              example: Asia/Taipei
+            user:
+              type: string
+              description: user name
+              example: System
+            source_ip:
+              type: string
+              description: source_ip
+              example: 10.0.0.1
+            source_name:
+              type: string
+              description: source name
+              example: NAS-471
+            nas_ip:
+              type: string
+              description: Nas IP
+              example: 10.0.0.2
+            nas_name:
+              type: string
+              description: Nas name
+              example: TS-471
+            content:
+              type: string
+              description: Log content.
+              example: Content
+      responseItems:
+        type: integer
+        description: response time
+        example: 10
+      totalItems:
+        type: integer
+        description: total items
+        example: 7646
+  API_SDK_Error_default:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: false
+      error_code:
+        type: integer
+        format: int32
+        example: 2969567233
+  API_SO_channels:
+    type: object
+    properties:
+      respType:
+        type: string
+        description: >-
+          The value of the response type. The format is
+          "StreamingOutput#THE_RESOURCE", where "THE_RESOURCE" represents the
+          resource type according to the API's name (i.e. channels, streams.
+          liveStream)
+      channels:
+        type: array
+        items:
+          type: object
+          properties:
+            channelIndex:
+              type: string
+              description: Channel index.
+            guid:
+              type: string
+              description: Unique identifier representing a specific channel.
+            name:
+              type: string
+              description: Name of the channel.
+            brand:
+              type: string
+              description: Camera brand of the channel.
+            model:
+              type: string
+              description: Camera model of the channel.
+  API_SO_streams:
+    type: object
+    properties:
+      respType:
+        type: string
+        description: >-
+          The value of the response type. The format is
+          "StreamingOutput#THE_RESOURCE", where "THE_RESOURCE" represents the
+          resource type according to the API's name (i.e. channels, streams.
+          liveStream)
+      channelIndex:
+        type: integer
+        description: Channel index.
+      guid:
+        type: string
+        description: >-
+          Unique identifier representing a specific channel. You can grant it
+          from API "/channels"
+      streams:
+        type: array
+        items:
+          type: object
+          properties:
+            stream:
+              type: integer
+              description: Stream ID.
+            status:
+              type: string
+              description: >-
+                Status of the stream. There are four kinds of status, which are
+                "NVR_CAM_CONNECTED", "NVR_CAM_CONNECT_IDLE",
+                "NVR_CAM_CONNECTING", "NVR_CAM_UNDEFINED"
+            videoCodec:
+              type: string
+              description: >-
+                Current video codec of the stream. (E.g. "H.264", "MJPEG", or
+                "H.265")
+            quality:
+              type: string
+              description: >-
+                Current quality of the stream. If the stream compression format
+                is H.264 or H.265, the compression quality supports CBR mode.
+                E.g. "512Kbps", "1Mbps", "2Mbps", "4Mbps", or "8Mbps". If the
+                compression format is MJPEG, the compression quality supports
+                VBR mode. E.g. "100", "90", "80", or "70".
+            resolution:
+              type: string
+              description: >-
+                The resolution (WxH) of the stream. (E.g. "1920x1080",
+                "1280x960".)
+            frameRate:
+              type: integer
+              description: FPS of the stream.
+  API_SO_liveStream_POST:
+    type: object
+    properties:
+      respType:
+        type: string
+        description: >-
+          The value of the response type. The format is
+          "StreamingOutput#THE_RESOURCE", where "THE_RESOURCE" represents the
+          resource type according to the API's name (i.e. channels, streams.
+          liveStream)
+      channelIndex:
+        type: integer
+        description: Channel ID.
+      guid:
+        type: string
+        description: Unique identifier representing a specific channel.
+      stream:
+        type: integer
+        description: Unique identifier representing a specific stream.
+      potocol:
+        type: string
+        description: Returned URI's protocol.
+      resourceUris:
+        type: string
+        description: >-
+          The URIs of the streaming resource. RTMP:
+          http://${DOMAIN}:${PORT}/v1/StreamingOutput/watch#${TOKEN}, HLS:
+          http://${DOMAIN}:${PORT}/v1/StreamingOutput/watch/hls/${TOKEN}.m3u8
+  API_SO_liveStream_POST_request_body:
+    type: object
+    properties:
+      protocol:
+        type: string
+        description: >-
+          Streaming protocol that the server needs to supply. There are two
+          supprtive protocol, RTMP and HLS.
+  API_SO_liveStream_DELETE_request_body:
+    type: object
+    properties:
+      token:
+        type: string
+        description: Streaming token that needs to delete.
+  API_SO_Error_default:
+    type: object
+    properties:
+      respType:
+        type: string
+      errorCode:
+        type: integer
+        format: int32
+      message:
+        type: string
+  API_CAMERA_SEARCH_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+      data:
+        type: array
+        items:
+          type: object
+          properties:
+            umsid:
+              type: string
+              description: Umsid.
+              example: 000000030000004B
+            address:
+              type: string
+              description: Camera IP address.
+              example: 10.64.104.7
+            vender:
+              type: string
+              description: Camera vender.
+              example: AXIS
+            model:
+              type: string
+              description: Camera model.
+              example: Q1602
+            mac_addr:
+              type: string
+              description: Camera MAC address.
+              example: '00:40:8c:c5:80:b8'
+            port:
+              type: number
+              description: Camera port.
+              example: 80
+      counter:
+        type: number
+        description: Total camera number.
+        example: 1
+  API_CAMERA_MREC_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: true
+  API_CAMERA_TEST_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: true
+  API_CAMERA_STATUS_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+      data:
+        type: array
+        items:
+          type: object
+          properties:
+            channel_index:
+              type: number
+              description: >-
+                Index of the channel of QVR Pro. Value starts from 0~127
+                (ch1~ch128)
+              example: 0
+            name:
+              type: string
+              description: Name of the channel.
+              example: AXIS_P1355
+            umsid:
+              type: string
+              description: UMSID of the camera.
+              example: 000000030000006E
+            guid:
+              type: string
+              description: >-
+                Unique identifier representing a specific channel. You can
+                acquire this value by using /camera/list API.
+              example: 00089BFA517D00089BFA517D00080000
+            brand:
+              type: string
+              description: Camera brand of the channel.
+              example: AXIS
+            model:
+              type: string
+              description: Camera model of the channel.
+              example: P1355
+            mac:
+              type: number
+              description: Channel MAC address.
+              example: '00:40:8C:F4:79:4D'
+            ver:
+              type: string
+              description: >-
+                Camera version acquiring from the camera. If there is no such
+                info in the camera. the value is "".
+              example: 5.60.1
+            ip:
+              type: string
+              description: Camera IP.
+              example: 10.64.104.79
+            port:
+              type: string
+              description: Camera port.
+              example: '80'
+            video_codec_setting:
+              type: string
+              description: Camera codec.
+              example: H.264
+            video_resolution_setting:
+              type: number
+              description: Channel resolution.
+              example: 800x450
+            frame_rate_setting:
+              type: string
+              description: camera frame rate.
+              example: FULL
+            video_quality_setting:
+              type: string
+              description: video quality.
+              example: Compression 30
+            stream_state:
+              type: array
+              items:
+                type: object
+                properties:
+                  stream:
+                    type: number
+                    description: Stream id.
+                    example: 0
+                  enable_normal_recording:
+                    type: number
+                    description: Enable normal recording.
+                    example: 0
+                  enable_alarm_recording:
+                    type: number
+                    description: Enable alarm recording.
+                    example: 1
+                  video_codec_setting:
+                    type: string
+                    description: Video codec setting.
+                    example: H.264
+                  video_resolution_setting:
+                    type: string
+                    description: Video resolution setting.
+                    example: 800x450
+                  frame_rate_setting:
+                    type: string
+                    description: Frame rate setting.
+                    example: Full
+                  video_quality_setting:
+                    type: string
+                    description: Video quality setting.
+                    example: Compression 30
+                  status:
+                    type: string
+                    description: >-
+                      Stream status. Possible status are "NVR_CAM_CONNECTED",
+                      "NVR_CAM_CONNECTION_ERROR",  "NVR_CAM_CONNECTING",
+                      "NVR_CAM_CONNECT_IDLE", "NVR_CAM_DISCONNECTED",
+                      "NVR_CAM_NON_LICENSED", and "NVR_CAM_UNDEFINED".
+                    example: NVR_CAM_CONNECT_IDLE
+                  rec_state:
+                    type: string
+                    description: >-
+                      Record state. Possible status are "RECORDING",
+                      "NOT_SETTING", "NOT_RECORDING", and "RECORDING_WITH_SPARE"
+                      (recording with spare space).
+                    example: NOT_RECORDING
+                  rec_state_err_code:
+                    type: number
+                    description: >-
+                      Shows the error code if there exist some error in each
+                      recording status.
+                    example: 0
+                  frame_rate:
+                    type: string
+                    description: Camera frame rate.
+                    example: '0'
+                  bit_rate:
+                    type: number
+                    description: Camera bit rate.
+                    example: 0
+            status:
+              type: string
+              description: >-
+                Stream status. Possible status are "NVR_CAM_CONNECTED",
+                "NVR_CAM_CONNECTION_ERROR",  "NVR_CAM_CONNECTING",
+                "NVR_CAM_CONNECT_IDLE", "NVR_CAM_DISCONNECTED",
+                "NVR_CAM_NON_LICENSED", and "NVR_CAM_UNDEFINED". This key
+                represents the recording stream. If the camera is a single
+                stream camera, its stream info also shows here.
+              example: NVR_CAM_CONNECTED
+            rec_state:
+              type: string
+              description: >-
+                Record state. Possible status are "RECORDING", "NOT_SETTING",
+                "NOT_RECORDING", and "RECORDING_WITH_SPARE" (recording with
+                spare space). This key represents the recording stream. If the
+                camera is a single stream camera, its stream info also shows
+                here.
+              example: RECORDING
+            rec_state_err_code:
+              type: number
+              description: >-
+                Record state error code. This key represents the recording
+                stream. If the camera is a single stream camera, its stream info
+                also shows here.
+              example: 0
+            frame_rate:
+              type: string
+              description: >-
+                Camera frame rate. This key represents the recording stream. If
+                the camera is a single stream camera, its stream info also shows
+                here.
+              example: '30'
+            bit_rate:
+              type: number
+              description: >-
+                Camera bit rate. This key represents the recording stream. If
+                the camera is a single stream camera, its stream info also shows
+                here.
+              example: 167418
+      total_channel_num:
+        type: number
+        description: Total channel number
+        example: 128
+  API_CAMERA_CAPABILITY_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: true
+      camera_motion:
+        type: array
+        description: shows which guid (camera) supports which kind of the camera motion
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Event name (Motion Detection)
+              example: Motion Detection
+            index:
+              type: number
+              description: Motion index.
+              example: 0
+            guids:
+              description: Supported guids.
+              type: array
+              items:
+                type: string
+                example: 00089BFA517D00089BFA517D00080000
+      motion_manual:
+        description: >-
+          shows which guid (camera) that you need to set motion function
+          manually at the camera config website
+        type: array
+        items:
+          type: string
+          example: null
+      alarm_input:
+        type: array
+        description: shows which guid (camera) supports which kind of the alarm input mode
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Event name (Alarm Input)
+              example: Alarm Input
+            index:
+              type: number
+              description: >-
+                This parameter represents the alarm input index (0~7) defined in
+                each camera (1~8). e.g. If a camera has two kinds of alarm input
+                (alarm input 1, 2), you can find its guid in index 0 and 1.
+            guids:
+              description: Supported guids.
+              type: array
+              items:
+                type: object
+                properties:
+                  guid:
+                    type: string
+                    description: guid
+                    example: 00089BFA517D00089BFA517D00080000
+                  status:
+                    type: string
+                    description: alarm status defined by the camera.
+                    example: Active
+      alarm_input_manual:
+        type: array
+        description: >-
+          shows which guid (camera) that you need to set alarm input function
+          manually at the camera config website
+        items:
+          type: string
+          example: null
+      alarm_pir:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Event name (PIR Detection)
+            example: PIR Detection
+          guids:
+            type: array
+            description: Guids
+            items:
+              type: string
+              example: null
+      alarm_pir_manual:
+        type: array
+        description: >-
+          shows which guid (camera) that you need to set alarm pir function
+          manually at the camera config website
+        items:
+          type: string
+          example: null
+      alarm_output:
+        type: array
+        description: shows which guid (camera) supports which kind of the alarm output mode
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Event name (Alarm Output)
+              example: Alarm Output
+            guid:
+              type: string
+              description: guid
+              example: 00089BFA517D00089BFA517D00080000
+            support_method:
+              type: number
+              description: >-
+                0 or 1, shows that if the camera is able to set Hi/Lo status by
+                the user. (Some of the cameras can not by set by user.)
+              example: 1
+            output_type:
+              type: array
+              description: 'alarm output type. 0:Lo/Inactive, 1:Hi/Active'
+              items:
+                type: object
+                properties:
+                  index:
+                    type: number
+                    description: output type index number
+                    example: 0
+                  type:
+                    type: number
+                    description: output type number
+                    example: 0
+      iva_crossline_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Cross Line)
+            example: Cross Line
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: null
+      iva_audio_detected_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Audio Detection)
+            example: Audio Detection
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: 00089BFA517D00089BFA517D00080000
+      iva_tampering_detected_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Tampering Detection)
+            example: Tampering Detection
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: 00089BFA517D00089BFA517D00080000
+      iva_intrusion_detected:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Intrusion Detection)
+            example: Intrusion Detection
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: null
+      iva_intrusion_detected_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Intrusion Detection)
+            example: Intrusion Detection Manual
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: null
+      iva_digital_autotrack_manual:
+        type: object
+        description: iva
+        properties:
+          name:
+            type: string
+            description: Event name (Digital Autotracking)
+            example: Digital Autotracking
+          guids:
+            type: array
+            description: guids
+            items:
+              type: string
+              description: guid
+              example: null
+      cameraControl:
+        type: array
+        description: shows which guid (camera) supports PTZ function
+        items:
+          type: object
+          properties:
+            guids:
+              type: array
+              description: guids
+              items:
+                type: object
+                properties:
+                  guid:
+                    type: string
+                    description: guid
+                    example: 00089BFA517D00089BFA517D00080003
+                  support_preset_points:
+                    type: boolean
+                    description: shows if this guid (camera) supports PTZ function.
+                    example: true
+  API_CAMERA_SUPPORT_RESPONSE:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: true
+      brands:
+        type: array
+        items:
+          type: object
+          properties:
+            text:
+              type: string
+              description: camera brand
+              example: 3S
+            value:
+              type: number
+              description: supported brand index
+              example: 0
+            models:
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    description: camera model
+                    example: N1011
+                  value:
+                    type: string
+                    description: camera model UMSID
+                    example: 0000004D00000011
+  API_CAMERA_PTZ_SUCCESS_RESPONSE:
+    type: object
+    properties:
+      error_code:
+        type: string
+        example: '0x0'
+      error_message:
+        type: string
+        example: Success
+  API_CAMERA_PTZ_FAIL_RESPONSE:
+    type: object
+    properties:
+      error_code:
+        type: string
+        example: '0x96020004'
+      error_message:
+        type: string
+        example: Auth Fail
+  API_LOGS_RESPONSE:
+    type: object
+    properties:
+      code:
+        type: integer
+        description: Status code.
+        example: 200
+      mesg:
+        type: string
+        description: Result description
+        example: OK
+      item:
+        type: array
+        items:
+          type: object
+          properties:
+            UTC_time:
+              type: integer
+              description: UTC_time.
+              example: 1444436555000
+            log_type:
+              type: integer
+              description: >-
+                1: Surveillance Settings 2: Surveillance Events 3: Surveillance
+                Connection 4: System Events 5: System Connection
+              example: 6
+            log_id:
+              type: integer
+              description: 'serial number '
+              example: 6234
+            level:
+              type: integer
+              description: log level
+              example: 1
+            time:
+              type: string
+              description: date time
+              example: '2017-03-08 00:00:00'
+            timezone:
+              type: string
+              description: timezone of system
+              example: Asia/Taipei
+            user:
+              type: string
+              description: user name
+              example: System
+            source_ip:
+              type: string
+              description: source_ip
+              example: 10.0.0.1
+            source_name:
+              type: string
+              description: source name
+              example: NAS-471
+            nas_ip:
+              type: string
+              description: Nas IP
+              example: 10.0.0.2
+            nas_name:
+              type: string
+              description: Nas name
+              example: TS-471
+            content:
+              type: string
+              description: Log content.
+              example: Content
+      responseItems:
+        type: integer
+        description: response time
+        example: 10
+      totalItems:
+        type: integer
+        description: total items
+        example: 7646
+  API_CAMERA_TEST_POST_REQ_BODY:
+    type: object
+    properties:
+      test_action:
+        type: number
+        description: value = 1
+        example: 1
+      ipcam_umsid:
+        type: string
+        description: >-
+          Camera UMSID, acquired from API "/qvrpro/camera/support". You should
+          combine umsid of brand and model to be the parameter value.
+        example: 000000030000006E
+      ipcam_address:
+        type: string
+        description: Camera IP
+        example: 10.64.104.79
+      ipcam_port:
+        type: number
+        description: Camera HTTP port
+        example: 80
+      ipcam_username:
+        type: string
+        description: Camera user name
+        example: root
+      ipcam_password:
+        type: string
+        description: Camera password
+        example: admin
+      ipcam_rtsp_port:
+        type: number
+        description: Camera RTSP port (optional)
+        example: 554
+      ipcam_http_video_url:
+        type: number
+        description: Camera HTTP video url (optional)
+        example: ''
+      nvr_channel_id:
+        type: number
+        description: NVR channel id (optional)
+        example: 1
+  Error_default:
+    type: object
+    properties:
+      success:
+        type: boolean
+        example: false
+      error_code:
+        type: integer
+        format: int32
+        example: 2969567233
+  API_removeVault_POST_request_body:
+    type: object
+    description: (example) remove two vaults
+    properties:
+      vault:
+        type: object
+        properties:
+          vault_id_list:
+            type: array
+            description: >-
+              key (vault_id) list. Relative vaults will be removed and invalid
+              keys in list will be ignored.
+            items:
+              type: string
+            example:
+              - IDB6122297C97A4901A31060E1DFFA9365
+              - IDB6122297C97A4901A31060E1DFFA93FA
+  API_addVault_POST_request_body:
+    type: object
+    description: (example) create GENERIC type vault
+    properties:
+      vault:
+        type: object
+        properties:
+          type:
+            type: string
+            example: GENERIC
+            description: >-
+              vault type, API now only support GENERIC type vault, so please
+              fill in GENERIC to create generic type vault.
+          vault_name:
+            type: string
+            description: vault name (30 UTF-8 characters)
+            example: TAWAWA Vault
+          description:
+            type: string
+            description: remark or description of vault (300 UTF-8 characters)
+            example: 'BASAKA supporsï¼Œphone:XXXX-XXXX'
+          enable:
+            type: boolean
+            description: >-
+              Enable/Disable(true/false) Vault. You can't saving metadata to
+              disabled vault, but still can query the metadata belong to it.
+            example: true
+  API_modifyVault_POST_request_body:
+    type: object
+    description: >-
+      (example) modify vault name, description, channel list and enale the
+      vault.
+    properties:
+      vault:
+        type: object
+        properties:
+          vault_id:
+            type: string
+            description: 'key, identifier of vault.'
+            example: IDB6122297C97A4901A31060E1DFFA9365
+          vault_name:
+            type: string
+            description: vault name (30 UTF-8 characters)
+            example: TAWAWA
+          description:
+            type: string
+            description: remark or description of vault (300 UTF-8 characters)
+            example: 'TAWAWA supporsï¼Œphone:XXXX-XXXX'
+          enable:
+            type: boolean
+            description: >-
+              Enable/Disable(true/false) Vault. You can't saving metadata to
+              disabled vault, but still can query the metadata belong to it.
+            example: true
+          channel_guid_list:
+            type: array
+            description: >
+              Binded channel list. You can get QVR Pro cahnnel information by
+              QVR Pro SDK.
+            items:
+              type: object
+              properties:
+                channel_index:
+                  type: integer
+                  description: Channel index
+                  example: 0
+                guid:
+                  type: string
+                  description: Channel id
+                  example: 00089BF9B26200089BF9B26200080000
+                channel_name:
+                  type: string
+                  description: Channel name
+                  example: camera_001
+  API_modifyFilter_POST_request_body:
+    type: object
+    description: |
+      (example) Set a rule - replace string simon to string jordan.
+    properties:
+      filter:
+        type: object
+        properties:
+          vault_id:
+            type: string
+            description: 'Key, identifier of vault.'
+            example: IDD6DB9551956A4E5EAF6D1B0E5BFF557D
+          rule_list:
+            type: array
+            description: Filter rule list
+            items:
+              type: object
+              description: Rules
+              properties:
+                name:
+                  type: string
+                  description: Rule name (30 UTF-8 characters)
+                type:
+                  type: integer
+                  description: |
+                    rule type, devided into the following:
+                      0: hide target string 
+                      1: replace target string with new line
+                      2: replace target string with user defined string
+                  example: 2
+                target:
+                  type: string
+                  description: Target string
+                  example: Simon
+                result:
+                  type: string
+                  description: 'Filtered result, only necessary for type:2 rules'
+                  example: Jordan
+  API_testFilter_POST_request_body:
+    type: object
+    description: (example) replace 'Simon' with 'Jordan'
+    properties:
+      filter:
+        type: object
+        properties:
+          vault_id:
+            type: string
+            description: 'Key, identifier of vault.'
+            example: IDD6DB9551956A4E5EAF6D1B0E5BFF557D
+          rule_list:
+            type: array
+            description: Filter rule list
+            items:
+              type: object
+              description: Rules
+              properties:
+                name:
+                  type: string
+                  description: Rule name (30 UTF-8 characters)
+                type:
+                  type: integer
+                  description: |
+                    rule type, devided into the following:
+                      0: hide target string 
+                      1: replace target string with new line
+                      2: replace target string with user defined string
+                  example: 2
+                target:
+                  type: string
+                  description: Target string
+                  example: Simon
+                result:
+                  type: string
+                  description: 'Filtered result, only necessary for type:2 rules'
+                  example: Jordan
+          metadata:
+            type: string
+            description: Test metadata which will be filterd.
+            example: '{"user":"Simon is a boardgame player"}'
+  API_recvTestData_POST_request_body:
+    type: object
+    description: (example) receive test metadata
+    properties:
+      filter:
+        type: object
+        properties:
+          vault_id:
+            type: string
+            description: 'Key, identifier of vault.'
+            example: ID257E51F595784337A9EE819D3EDD954C
+          act:
+            type: string
+            description: 'API action, should be reg_evt(recving data)'
+            example: reg_evt
+          type:
+            type: string
+            description: 'Vault type, should be GENERIC.'
+            example: generic
+  API_recvNotify_POST_request_body:
+    type: object
+    description: (example) save car and driver data to the vault.
+    properties:
+      eventObjects:
+        type: array
+        description: Metadata list
+        items:
+          $ref: '#/definitions/Event_object_recv_format'
+  API_queryMetadata_POST_request_body:
+    type: object
+    description: (example) Query metadata with multiple conditions.
+    properties:
+      metadata:
+        type: object
+        properties:
+          vault_name:
+            type: array
+            items:
+              type: string
+            description: >-
+              Vault name(partially match) list, metadata should match at least
+              one of them.
+            example:
+              - TAWAWA
+          vault_id_list:
+            type: array
+            description: >-
+              Key(Completely match) list, metadata should match at least one of
+              them.
+            items:
+              type: string
+            example:
+              - ID8F167D0B8DF24712B8980CC90AC01F42
+          start_time_stamp:
+            type: string
+            description: 'Start time (UTC, unit:millisecond)'
+            example: '1502002061000'
+          end_time_stamp:
+            type: string
+            example: '1502088461000'
+            description: 'End time (UTC, unit:millisecond)'
+          channel_guid_list:
+            type: array
+            description: >-
+              Channel guid(Completely match), metadata should match at least one
+              of them.
+            items:
+              type: string
+            example:
+              - 00089BF9B26200089BF9B26200080000
+          keyword_list:
+            type: array
+            description: 'keyword list, metadata should match at all of them.'
+            items:
+              type: string
+            example:
+              - Simon
+              - Jay
+  Response_no_extra:
+    type: object
+    description: (example) no extra field
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 0
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: OK
+  Response_checkVaultName:
+    type: object
+    description: '(example) response the vault name was used ("repeated": true)'
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 0
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: OK
+          extra:
+            type: object
+            description: Extra field
+            properties:
+              repeated:
+                type: boolean
+                description: 'true:used, false:unused'
+                example: true
+  Response_addVault_general_type:
+    type: object
+    description: (example) return key(vault_id) and net information
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 0
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: OK
+          extra:
+            type: object
+            description: Extra field
+            properties:
+              vault_id:
+                type: string
+                description: 'Key, identifier of vault.'
+                example: IDE844AEBFD16F4342817C784D835F7B3F
+              net_info:
+                type: object
+                description: >
+                  QTS net information, which was used to combine URL for saving
+                  metadata, templates are followingï¼š
+
+                  "http://{IP}:{PORT}/qvrpro/qvrip/Event/recvNotify/GENERIC/{VAULT_ID}"
+
+                  "https://{IP}:{SSL_PORT}/qvrpro/qvrip/Event/recvNotify/GENERIC/{VAULT_ID}"
+                properties:
+                  local_ip_list:
+                    description: local IP list
+                    type: array
+                    items:
+                      type: string
+                  port:
+                    description: HTTP port
+                    type: integer
+                  sslPort:
+                    description: HTTP SSL port
+                    type: integer
+                  mycloudnas_hn:
+                    description: myQclould host name
+                    type: string
+                  ddns_hn:
+                    description: DDNS host name
+                    type: string
+                  extPort:
+                    description: external port
+                    type: integer
+                  extSslPort:
+                    description: external HTTP SSL port
+                    type: integer
+                  external_ip:
+                    description: external IP
+                    type: string
+                  forceSSL:
+                    description: force HTTP SSL
+                    type: integer
+                  ipv6Enable:
+                    description: enalbe HTTP IPV6
+                    type: integer
+                example:
+                  local_ip_list:
+                    - 10.64.104.38
+                  port: 8080
+                  sslPort: 441
+                  ddns_hn: ''
+                  mycloudnas_hn: ''
+                  extPort: 8080
+                  extSslPort: 441
+                  external_ip: 60.248.96.95
+                  forceSSL: 0
+                  ipv6Enable: 0
+  Response_getVaultList:
+    type: object
+    description: (example) return all vault information
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 0
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: OK
+          extra:
+            type: object
+            properties:
+              vault_list:
+                description: Vault list
+                type: array
+                items:
+                  $ref: '#/definitions/Vault_info_with_status_format'
+  Response_getVaultInfo:
+    type: object
+    description: (example) response target vault information
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 0
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: OK
+          extra:
+            type: object
+            properties:
+              vault_list:
+                type: array
+                description: Vault list
+                items:
+                  $ref: '#/definitions/Vault_info_with_status_format'
+  Response_testFilter:
+    type: object
+    description: (example) response filtered metadata
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 0
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: OK
+          extra:
+            type: object
+            properties:
+              filter:
+                type: string
+                description: metadata filtered by rules
+                example: Jordan is a boardgame player
+  Response_recvTestData:
+    type: object
+    description: (example) response received metadata
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 0
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: OK
+          extra:
+            type: object
+            properties:
+              filter:
+                type: object
+                description: received metadata
+                example:
+                  name: Front Door
+                  username: Jordan
+                  acc_controller_id: 10111250
+                  acc_periphal_id: 1
+                  acc_periphal_type: Card Reader
+  Response_queryMetadata:
+    type: object
+    description: (example) response querying result
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 0
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: OK
+          extra:
+            type: object
+            properties:
+              count:
+                type: integer
+                description: number of querying results
+                example: 2
+              metadata_list:
+                type: array
+                description: metdata list
+                items:
+                  type: object
+                  properties:
+                    vault_id:
+                      type: string
+                      description: 'Key, identifier of vault.'
+                      example: ID8F167D0B8DF24712B8980CC90AC01F42
+                    channel_guid_list:
+                      type: array
+                      description: binded channel list
+                      items:
+                        type: object
+                        properties:
+                          channel_index:
+                            type: integer
+                            description: channel index
+                            example: 0
+                          guid:
+                            type: string
+                            description: channel id
+                            example: 00089BF9B26200089BF9B26200080000
+                          channel_name:
+                            type: string
+                            description: channel name
+                            example: camera_001
+                    type:
+                      type: string
+                      description: Vault type
+                      example: GENERIC
+                    brand:
+                      type: string
+                      description: brand of metadata source (ignore in GENERIC type vault)
+                      example: '--'
+                    vault_name:
+                      type: string
+                      description: vault name (30 UTF-8 characters)
+                      example: TAWAWA
+                    utc_time:
+                      type: string
+                      description: 'receiving time(UTC, unit:millisecond)'
+                      example: 1507710016000
+                    timezone:
+                      type: string
+                      description: 'timezone information (UTC, unit:second)'
+                      example: -28800
+                    date:
+                      type: string
+                      description: date information(in server timezone)
+                      example: 2017-10-03T13:14:09.000Z
+                    metadata:
+                      type: object
+                      description: JSON format metadata
+                example:
+                  - vault_id: ID8F167D0B8DF24712B8980CC90AC01F42
+                    channel_guid_list:
+                      - channel_index: 0
+                        guid: 00089BF9B26200089BF9B26200080000
+                        channel_name: camera_00
+                    type: GENERIC
+                    brand: '--'
+                    vault_name: front_door
+                    utc_time: '1502088461000'
+                    timezone: '28800'
+                    date: '2017-09-14 09:11:22'
+                    metadata:
+                      driver: Simon
+                      car_brand: JayCar
+                  - vault_id: ID8F167D0B8DF24712B8980CC90AC01F63
+                    channel_guid_list:
+                      - channel_index: 0
+                        guid: 00089BF9B26200089BF9B26200080000
+                        channel_name: camera_00
+                    type: GENERIC
+                    brand: '--'
+                    vault_name: TAWAWA
+                    utc_time: '1502088430000'
+                    timezone: '28800'
+                    date: '2017-09-11 05:08:24'
+                    metadata:
+                      parking_lot: simon-231
+                      car_number: 132
+                      administrator: Jay Liao
+  Vault_info_format:
+    type: object
+    properties:
+      vault_id:
+        type: string
+        description: 'Key, identifier of vault.'
+        example: IDB6122297C97A4901A31060E1DFFA9365
+      type:
+        type: string
+        description: Vault type
+        example: GENERIC
+      brand:
+        type: string
+        description: brand of metadata source (ignore in GENERIC type vault)
+        example: '--'
+      vault_name:
+        type: string
+        description: vault name (30 UTF-8 characters)
+        example: TAWAWA
+      description:
+        type: string
+        description: remark or description of vault (300 UTF-8 characters)
+        example: 'TAWAWA supportï¼Œphone:XXXX-XXXX'
+      enable:
+        type: boolean
+        description: Enable/disable(true/false) vault.
+        example: true
+      warring_interval:
+        type: integer
+        description: >-
+          idle warning time. Warning user if the vault idle over this time.
+          (ignore in GENERIC type vault)
+        example: 600
+      channel_guid_list:
+        type: array
+        description: binded channel list
+        items:
+          type: object
+          properties:
+            channel_index:
+              type: integer
+              description: channel index
+              example: 0
+            guid:
+              type: string
+              description: channel id
+              example: 00089BF9B26200089BF9B26200080000
+            channel_name:
+              type: string
+              description: channel name
+              example: camera_001
+  Vault_info_with_status_format:
+    type: object
+    properties:
+      vault_id:
+        type: string
+        description: 'Key, identifier of vault.'
+        example: IDB6122297C97A4901A31060E1DFFA9365
+      type:
+        type: string
+        description: Vault type
+        example: GENERIC
+      brand:
+        type: string
+        description: brand of metadata source (ignore in GENERIC type vault)
+        example: '--'
+      vault_name:
+        type: string
+        description: vault name (30 UTF-8 characters)
+        example: TAWAWA
+      description:
+        type: string
+        description: remark or description of vault (300 UTF-8 characters)
+        example: 'TAWAWA supportï¼Œphone:XXXX-XXXX'
+      enable:
+        type: boolean
+        description: Enable/disable(true/false) vault.
+        example: true
+      warring_interval:
+        type: integer
+        description: >-
+          idle warning time. Warning user if the vault idle over this time.
+          (ignore in GENERIC type vault)
+        example: 600
+      channel_guid_list:
+        type: array
+        description: binded channel list
+        items:
+          type: object
+          properties:
+            channel_index:
+              type: integer
+              description: channel index
+              example: 0
+            guid:
+              type: string
+              description: channel id
+              example: 00089BF9B26200089BF9B26200080000
+            channel_name:
+              type: string
+              description: channel name
+              example: camera_001
+      filter:
+        type: array
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+              description: rule name (up to 30 UTF-8 characters)
+              example: rule001
+            type:
+              type: integer
+              description: |
+                rule type, devided into the following:
+                      0: hide target string 
+                      1: replace target string with new line
+                      2: replace target string with user defined string
+              example: 2
+            target:
+              type: string
+              description: target string
+              example: Simon
+            result:
+              type: string
+              description: filtered result
+              example: Jordan
+      status:
+        type: object
+        description: vault status
+        properties:
+          last_recv_time_str:
+            type: string
+            description: 'last time of receiving metadata (UTC, unit:millisecond)'
+            example: 1507707730000
+  Event_object_format:
+    type: object
+    properties:
+      channel_guid_list:
+        type: array
+        description: The array of channel guid
+        items:
+          type: string
+      utc_time:
+        type: string
+        description: The string of UTC timestamp in millisecond
+        example: '1503901492000'
+      timezone:
+        type: string
+        description: Timezone info in format in second
+        example: '28800'
+      type:
+        type: string
+        description: 'Vault type, should be GENERIC'
+        example: GENERIC
+      brand:
+        type: string
+        description: brand of metadata source (ignore in GENERIC type vault)
+        example: QNAP
+      metadata:
+        type: array
+        items:
+          type: object
+          description: Any json format metadata
+        example:
+          - driver: Simon
+            car_brand: YAHA
+          - driver: Don
+            car_brand: PGGO
+  Event_object_recv_format:
+    type: object
+    description: Metadata Vault standard metadata format
+    properties:
+      utc_time:
+        type: string
+        description: >-
+          UTC time(unit:millisecond). Nonstandard format metadata will fill in
+          this field with receiving time.
+        example: '1503901492000'
+      timezone:
+        type: string
+        description: >-
+          timezone information(unit:second). Nonstandard format metadata will
+          fill in in this field with '--'
+        example: '28800'
+      metadata:
+        type: object
+        description: >-
+          JSON format metadataï¼ŒNonstandard format metadata will save all
+          received data to this field.
+        example:
+          driver: Simon
+          car_brand: YAHA
+  API_metadata_Error_default:
+    type: object
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 3288336129
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: Authentication failed
+  Error_400:
+    type: object
+    properties:
+      ReturnStatus:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: >-
+              The code to represent Executing status, please reference Error
+              Code List of the API.
+            example: 3288334593
+          statusString:
+            type: string
+            description: The desciption to represent Executing status.
+            example: Unable to parse incoming JSON text

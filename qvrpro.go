@@ -585,7 +585,7 @@ const (
 	SurveillanceSettingsLogType    = 5
 )
 
-func (connection *Connection) Logs(logType uint, start uint, maxResults uint, startTime uint, endTime uint) []LogEntry {
+func (connection *Connection) Logs(logType uint, start int, maxResults uint, startTime int64, endTime int64) []LogEntry {
 	qvrProLogEntry := make([]LogEntry, 0)
 
 	baseUrl, err := url.Parse(connection.url)

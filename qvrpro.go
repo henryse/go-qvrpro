@@ -394,7 +394,7 @@ func (connection *Connection) PlaySeek(sessionId string, seekTime int) (bool, er
 	return code == 0, nil
 }
 
-func (connection *Connection) play(sessionId string) (bool, error) {
+func (connection *Connection) Play(sessionId string) (bool, error) {
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
 		log.Println("Malformed URL: ", err.Error())
@@ -434,7 +434,28 @@ func (connection *Connection) play(sessionId string) (bool, error) {
 	return code == 0, nil
 }
 
-func (connection *Connection) PlayGet(sessionId string) bool {
+//goland:noinspection GoUnusedConst
+const (
+	RecordingTypeOnlyAlarmFile = 1
+	RecordingTypeNormalFile    = 1
+	DataTypeJPeg               = 0
+	DataTypeSource             = 1
+)
+
+// PlayGet
+// 1. If data_type (parameter in Step 1) is '0'/DataTypeJPeg (JPEG)
+// The frame is only a video frame
+// ---
+// [channel_name]\n
+// [timestamp]\n // in UTC time format
+// [jpeg image length]\n // INT
+// [jpeg data] // BINARY, binary data of length [jpeg image length]
+// ---
+// 2. If data_type (parameter in Step 1) is '1'/DataTypeSource (source format of recording files)
+// A [media frame] is either a video or an audio frame. The format of [media
+// frame] is the same as described in API "Live Streaming"
+
+func (connection *Connection) PlayGet(sessionId string, dataType int) bool {
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
 		log.Println("Malformed URL: ", err.Error())
@@ -448,6 +469,7 @@ func (connection *Connection) PlayGet(sessionId string) bool {
 	params.Add("sid", connection.sid)
 	params.Add("ver", apiPlayVersion)
 	params.Add("session", sessionId)
+	params.Add("data_type", strconv.Itoa(dataType))
 
 	baseUrl.RawQuery = params.Encode()
 	tr := &http.Transport{
@@ -475,7 +497,7 @@ func (connection *Connection) PlayGet(sessionId string) bool {
 	return true
 }
 
-func (connection *Connection) Video(channelId string, seekTime int) ([]byte, error) {
+func (connection *Connection) PlayFrame(channelId string, seekTime int) ([]byte, error) {
 
 	sessionId, err := connection.CreateSessionId(channelId, seekTime)
 	if len(sessionId) == 0 {
@@ -487,12 +509,12 @@ func (connection *Connection) Video(channelId string, seekTime int) ([]byte, err
 		return nil, err
 	}
 
-	success, err = connection.play(sessionId)
+	success, err = connection.Play(sessionId)
 	if !success {
 		return nil, err
 	}
 
-	success = connection.PlayGet(sessionId)
+	success = connection.PlayGet(sessionId, DataTypeJPeg)
 	if !success {
 		return nil, errors.New("unable to get play data")
 	}

@@ -621,14 +621,14 @@ func (connection *Connection) Logs(logType uint, start int, maxResults uint, sta
 	params := url.Values{}
 	params.Add("sid", connection.sid)
 	if AllLogType != logType {
-		params.Add("log_type", strconv.Itoa(int(startTime)))
+		params.Add("log_type", strconv.Itoa(int(logType)))
 	}
 	if startTime != 0 {
-		params.Add("start_time", strconv.Itoa(int(endTime)))
+		params.Add("start_time", strconv.Itoa(int(startTime)))
 
 	}
 	if endTime != 0 {
-		params.Add("end_time", strconv.Itoa(int(logType)))
+		params.Add("end_time", strconv.Itoa(int(endTime)))
 
 	}
 	params.Add("start", strconv.Itoa(start))

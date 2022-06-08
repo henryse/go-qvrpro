@@ -607,7 +607,7 @@ const (
 	SurveillanceSettingsLogType    = 5
 )
 
-func (connection *Connection) Logs(logType uint, start int, maxResults uint, startTime int64, endTime int64) []LogEntry {
+func (connection *Connection) Logs(logType uint, startTime int64, maxResults int) []LogEntry {
 	qvrProLogEntry := make([]LogEntry, 0)
 
 	baseUrl, err := url.Parse(connection.url)
@@ -627,12 +627,9 @@ func (connection *Connection) Logs(logType uint, start int, maxResults uint, sta
 		params.Add("start_time", strconv.Itoa(int(startTime)))
 
 	}
-	if endTime != 0 {
-		params.Add("end_time", strconv.Itoa(int(endTime)))
-
-	}
-	params.Add("start", strconv.Itoa(start))
-	params.Add("max_results", strconv.Itoa(int(maxResults)))
+	params.Add("sort_field", "time")
+	params.Add("max_results", strconv.Itoa(maxResults))
+	params.Add("dir", "ASC")
 
 	baseUrl.RawQuery = params.Encode()
 	tr := &http.Transport{

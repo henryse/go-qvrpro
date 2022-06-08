@@ -631,7 +631,7 @@ func (connection *Connection) Logs(logType uint, start int, maxResults uint, sta
 		params.Add("end_time", strconv.Itoa(int(logType)))
 
 	}
-	params.Add("start", strconv.Itoa(int(start)))
+	params.Add("start", strconv.Itoa(start))
 	params.Add("max_results", strconv.Itoa(int(maxResults)))
 
 	baseUrl.RawQuery = params.Encode()

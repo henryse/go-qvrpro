@@ -624,11 +624,11 @@ func (connection *Connection) Logs(logType uint, start int, maxResults uint, sta
 		params.Add("log_type", strconv.Itoa(int(startTime)))
 	}
 	if startTime != 0 {
-		params.Add("end_time", strconv.Itoa(int(endTime)))
+		params.Add("start_time", strconv.Itoa(int(endTime)))
 
 	}
 	if endTime != 0 {
-		params.Add("log_type", strconv.Itoa(int(logType)))
+		params.Add("end_time", strconv.Itoa(int(logType)))
 
 	}
 	params.Add("start", strconv.Itoa(int(start)))

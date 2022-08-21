@@ -96,11 +96,20 @@ type QDocRoot struct {
 	CUID            string       `xml:"cuid"`
 }
 
+type QvrApplication string
+
+//goland:noinspection GoUnusedConst
+const (
+	QvrPro   QvrApplication = "qvrpro"
+	QvrElite                = "qvrelite"
+)
+
 type Connection struct {
 	url     string
 	sid     string
 	expire  int64
 	timeout int64
+	qvrApp  QvrApplication
 }
 
 var errorCodes map[int]string
@@ -108,19 +117,18 @@ var errorCodes map[int]string
 var apiVersion = "1.2.0"
 var apiPlayVersion = "v1"
 
-var qvrPlayPath = "/qvrpro/apis/qplay.cgi"
-
 var singletonConnection *Connection
 var onceConnection sync.Once
 
 //goland:noinspection GoUnusedExportedFunction
-func Create(url string, timeout int64) *Connection {
+func Create(url string, qvrApp QvrApplication, timeout int64) *Connection {
 	onceConnection.Do(func() {
 		singletonConnection = &Connection{
 			url:     url,
 			expire:  0,
 			timeout: timeout,
 			sid:     "",
+			qvrApp:  qvrApp,
 		}
 
 		errorCodes = make(map[int]string)
@@ -150,6 +158,30 @@ func Create(url string, timeout int64) *Connection {
 	})
 
 	return singletonConnection
+}
+
+func (connection *Connection) PlayPath() string {
+	return fmt.Sprintf("/%s/apis/qplay.cgi", connection.qvrApp)
+}
+
+func (connection *Connection) StreamsPath() string {
+	return fmt.Sprintf("/%s/streaming/getstream.cgi", connection.qvrApp)
+}
+
+func (connection *Connection) LogsPath() string {
+	return fmt.Sprintf("/%s/logs/logs", connection.qvrApp)
+}
+
+func (connection *Connection) CameraListPath() string {
+	return fmt.Sprintf("/%s/camera/list", connection.qvrApp)
+}
+
+func (connection *Connection) CameraCapabilityPath() string {
+	return fmt.Sprintf("/%s/camera/capability", connection.qvrApp)
+}
+
+func (connection *Connection) CameraSnapshotPath(channelId string) string {
+	return fmt.Sprintf("/%s/camera/snapshot/%s", connection.qvrApp, channelId)
 }
 
 func (connection *Connection) Logout() {
@@ -251,7 +283,7 @@ func (connection *Connection) CameraList() ([]byte, error) {
 		return nil, err
 	}
 
-	baseUrl.Path = "/qvrpro/camera/list"
+	baseUrl.Path = connection.CameraListPath()
 
 	params := url.Values{}
 	params.Add("sid", connection.sid)
@@ -283,7 +315,7 @@ func (connection *Connection) CameraCapability() ([]byte, error) {
 		return nil, err
 	}
 
-	baseUrl.Path = "/qvrpro/camera/capability"
+	baseUrl.Path = connection.CameraCapabilityPath()
 
 	params := url.Values{}
 	params.Add("sid", connection.sid)
@@ -309,7 +341,7 @@ func (connection *Connection) CameraCapability() ([]byte, error) {
 func (connection *Connection) CreateSessionId(channelId string, startTime int) (string, error) {
 	baseUrl, err := url.Parse(connection.url)
 	if err == nil {
-		baseUrl.Path = qvrPlayPath
+		baseUrl.Path = connection.PlayPath()
 
 		params := url.Values{}
 		params.Add("cmd", "open")
@@ -362,7 +394,7 @@ func (connection *Connection) PlaySeek(sessionId string, seekTime int) (bool, er
 		return false, err
 	}
 
-	baseUrl.Path = qvrPlayPath
+	baseUrl.Path = connection.PlayPath()
 
 	params := url.Values{}
 	params.Add("cmd", "seek")
@@ -401,7 +433,7 @@ func (connection *Connection) Play(sessionId string) (bool, error) {
 		return false, err
 	}
 
-	baseUrl.Path = qvrPlayPath
+	baseUrl.Path = connection.PlayPath()
 
 	params := url.Values{}
 	params.Add("cmd", "play")
@@ -462,7 +494,7 @@ func (connection *Connection) PlayGet(sessionId string, dataType int) bool {
 		return false
 	}
 
-	baseUrl.Path = qvrPlayPath
+	baseUrl.Path = connection.PlayPath()
 
 	params := url.Values{}
 	params.Add("cmd", "get")
@@ -529,7 +561,7 @@ func (connection *Connection) LiveStream(channelId string, streamId string) ([]b
 		return nil, err
 	}
 
-	baseUrl.Path = "/qvrpro/streaming/getstream.cgi"
+	baseUrl.Path = connection.StreamsPath()
 
 	params := url.Values{}
 	params.Add("sid", connection.sid)
@@ -616,7 +648,7 @@ func (connection *Connection) Logs(logType uint, startTime int64, maxResults int
 		return qvrProLogEntry
 	}
 
-	baseUrl.Path = "/qvrpro/logs/logs"
+	baseUrl.Path = connection.LogsPath()
 
 	params := url.Values{}
 	params.Add("sid", connection.sid)
@@ -655,7 +687,7 @@ func (connection *Connection) CameraSnapshot(channelId string, imageTs int) ([]b
 		return nil, err
 	}
 
-	baseUrl.Path = "/qvrpro/camera/snapshot/" + channelId
+	baseUrl.Path = connection.CameraSnapshotPath(channelId)
 
 	params := url.Values{}
 	params.Add("sid", connection.sid)

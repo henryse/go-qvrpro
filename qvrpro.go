@@ -100,9 +100,21 @@ type QvrApplication string
 
 //goland:noinspection GoUnusedConst
 const (
-	QvrPro   QvrApplication = "qvrpro"
-	QvrElite                = "qvrelite"
+	QvrPro     QvrApplication = "qvrpro"
+	QvrElite                  = "qvrelite"
+	QvrUnknown                = "unknown"
 )
+
+//goland:noinspection GoUnusedExportedFunction
+func QvrApplicationParse(app string) QvrApplication {
+	switch strings.ToLower(app) {
+	case "qvrpro":
+		return QvrPro
+	case "qvrelite":
+		return QvrElite
+	}
+	return QvrUnknown
+}
 
 type Connection struct {
 	url     string

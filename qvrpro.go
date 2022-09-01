@@ -608,30 +608,30 @@ func (connection *Connection) LiveStream(channelId string, streamId string) ([]b
 }
 
 type LogEntry struct {
-	UTCTime         int64    `json:"UTC_time"`
-	UTCTimeS        string   `json:"UTC_time_s"`
-	Content         string   `json:"content"`
-	Level           int      `json:"level"`
-	LogID           int      `json:"log_id"`
-	LogType         int      `json:"log_type"`
-	NasIP           string   `json:"nas_ip"`
-	NasName         string   `json:"nas_name"`
-	ServerTime      int64    `json:"server_time"`
-	SourceIP        string   `json:"source_ip"`
-	SourceName      string   `json:"source_name"`
-	Time            string   `json:"time"`
-	Timezone        string   `json:"timezone"`
-	TimezoneOrder   int      `json:"timezone_order"`
-	User            string   `json:"user"`
-	Action          string   `json:"action,omitempty"`
-	Args            []string `json:"args,omitempty"`
-	ChannelID       int      `json:"channel_id,omitempty"`
-	EventID         int      `json:"event_id,omitempty"`
-	GlobalChannelID string   `json:"global_channel_id,omitempty"`
-	MainType        int      `json:"main_type,omitempty"`
-	SubType         int      `json:"sub_type,omitempty"`
-	SubTypeOrder    int      `json:"sub_type_order,omitempty"`
-	Application     string   `json:"application,omitempty"`
+	UTCTime         int64          `json:"UTC_time"`
+	UTCTimeS        string         `json:"UTC_time_s"`
+	Content         string         `json:"content"`
+	Level           int            `json:"level"`
+	LogID           int            `json:"log_id"`
+	LogType         int            `json:"log_type"`
+	NasIP           string         `json:"nas_ip"`
+	NasName         string         `json:"nas_name"`
+	ServerTime      int64          `json:"server_time"`
+	SourceIP        string         `json:"source_ip"`
+	SourceName      string         `json:"source_name"`
+	Time            string         `json:"time"`
+	Timezone        string         `json:"timezone"`
+	TimezoneOrder   int            `json:"timezone_order"`
+	User            string         `json:"user"`
+	Action          string         `json:"action,omitempty"`
+	Args            []string       `json:"args,omitempty"`
+	ChannelID       int            `json:"channel_id,omitempty"`
+	EventID         int            `json:"event_id,omitempty"`
+	GlobalChannelID string         `json:"global_channel_id,omitempty"`
+	MainType        int            `json:"main_type,omitempty"`
+	SubType         int            `json:"sub_type,omitempty"`
+	SubTypeOrder    int            `json:"sub_type_order,omitempty"`
+	Application     QvrApplication `json:"application,omitempty"`
 }
 
 type LogsResponse struct {
@@ -689,6 +689,10 @@ func (connection *Connection) Logs(logType uint, startTime int64, maxResults int
 	err = json.Unmarshal(body, &qvrResponse)
 	if err != nil {
 		return qvrProLogEntry
+	}
+
+	for i := range qvrResponse.Items {
+		qvrResponse.Items[i].Application = connection.qvrApp
 	}
 
 	return qvrResponse.Items

@@ -631,6 +631,7 @@ type LogEntry struct {
 	MainType        int      `json:"main_type,omitempty"`
 	SubType         int      `json:"sub_type,omitempty"`
 	SubTypeOrder    int      `json:"sub_type_order,omitempty"`
+	Application     string   `json:"application,omitempty"`
 }
 
 type LogsResponse struct {

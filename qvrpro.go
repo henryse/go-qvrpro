@@ -41,7 +41,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -259,7 +258,7 @@ func (connection *Connection) Login(user string, password string) bool {
 		return false
 	}
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 
 	if nil != err {
 		log.Print(err)
@@ -313,7 +312,7 @@ func (connection *Connection) CameraList() ([]byte, error) {
 		return nil, err
 	}
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 
 	if err != nil {
 		return nil, err
@@ -342,7 +341,7 @@ func (connection *Connection) CameraCapability() ([]byte, error) {
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 
 	if err != nil {
 		return nil, err
@@ -376,7 +375,7 @@ func (connection *Connection) CreateSessionId(channelId string, startTime int) (
 		response, err := client.Get(baseUrl.String())
 
 		if nil == err {
-			bodyText, err := ioutil.ReadAll(response.Body)
+			bodyText, err := io.ReadAll(response.Body)
 			if nil == err {
 				v := strings.Split(string(bodyText), "\n")
 
@@ -423,7 +422,7 @@ func (connection *Connection) PlaySeek(sessionId string, seekTime int) (bool, er
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
 
-	bodyText, err := ioutil.ReadAll(response.Body)
+	bodyText, err := io.ReadAll(response.Body)
 
 	v := strings.Split(string(bodyText), "\n")
 
@@ -462,7 +461,7 @@ func (connection *Connection) Play(sessionId string) (bool, error) {
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
 
-	bodyText, err := ioutil.ReadAll(response.Body)
+	bodyText, err := io.ReadAll(response.Body)
 
 	v := strings.Split(string(bodyText), "\n")
 
@@ -684,7 +683,7 @@ func (connection *Connection) Logs(logType uint, startTime int64, maxResults int
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
 
-	body, err := ioutil.ReadAll(response.Body)
+	body, err := io.ReadAll(response.Body)
 	var qvrResponse LogsResponse
 	err = json.Unmarshal(body, &qvrResponse)
 	if err != nil {
@@ -722,7 +721,7 @@ func (connection *Connection) CameraSnapshot(channelId string, imageTs int) ([]b
 		return nil, err
 	}
 
-	body, _ := ioutil.ReadAll(response.Body)
+	body, _ := io.ReadAll(response.Body)
 
 	return body, nil
 }

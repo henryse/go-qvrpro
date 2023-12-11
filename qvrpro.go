@@ -212,8 +212,9 @@ func (connection *Connection) Logout() {
 		}
 		client := &http.Client{Transport: tr}
 
-		response, err := client.Get(baseUrl.String())
+		log.Printf("[INFO] %s\n", baseUrl.String())
 
+		response, err := client.Get(baseUrl.String())
 		if err != nil {
 			log.Print(err.Error())
 		}
@@ -252,9 +253,10 @@ func (connection *Connection) Login(user string, password string) bool {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
-	log.Printf("[INFO] %s\n", baseUrl.String())
-	response, err := client.Get(baseUrl.String())
 
+	log.Printf("[INFO] %s\n", baseUrl.String())
+
+	response, err := client.Get(baseUrl.String())
 	if err != nil {
 		log.Println("Get Failed: ", err.Error())
 		connection.Logout()
@@ -312,9 +314,10 @@ func (connection *Connection) CameraList() ([]byte, error) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
-	log.Printf("[INFO] %s\n", baseUrl.String())
-	response, err := client.Get(baseUrl.String())
 
+	log.Printf("[INFO] %s\n", baseUrl.String())
+
+	response, err := client.Get(baseUrl.String())
 	if err != nil {
 		return nil, err
 	}
@@ -349,9 +352,10 @@ func (connection *Connection) CameraCapability() ([]byte, error) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
-	log.Printf("[INFO] %s\n", baseUrl.String())
-	response, err := client.Get(baseUrl.String())
 
+	log.Printf("[INFO] %s\n", baseUrl.String())
+
+	response, err := client.Get(baseUrl.String())
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +394,9 @@ func (connection *Connection) CreateSessionId(channelId string, startTime int) (
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
 		client := &http.Client{Transport: tr}
+
 		log.Printf("[INFO] %s\n", baseUrl.String())
+
 		response, err := client.Get(baseUrl.String())
 
 		if nil == err {
@@ -442,8 +448,14 @@ func (connection *Connection) PlaySeek(sessionId string, seekTime int) (bool, er
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
+
 	log.Printf("[INFO] %s\n", baseUrl.String())
+
 	response, err := client.Get(baseUrl.String())
+
+	if err != nil {
+		return false, err
+	}
 
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -485,8 +497,14 @@ func (connection *Connection) Play(sessionId string) (bool, error) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
+
 	log.Printf("[INFO] %s\n", baseUrl.String())
+
 	response, err := client.Get(baseUrl.String())
+
+	if err != nil {
+		return false, err
+	}
 
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -550,8 +568,14 @@ func (connection *Connection) PlayGet(writer http.ResponseWriter, sessionId stri
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
+
 	log.Printf("[INFO] %s\n", baseUrl.String())
+
 	response, err := client.Get(baseUrl.String())
+
+	if err != nil {
+		return err
+	}
 
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -610,7 +634,9 @@ func (connection *Connection) LiveStream(writer http.ResponseWriter, channelId s
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
+
 	log.Printf("[INFO] %s\n", baseUrl.String())
+
 	response, err := client.Get(baseUrl.String())
 
 	if err != nil {
@@ -708,8 +734,14 @@ func (connection *Connection) Logs(logType uint, startTime int64, maxResults int
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
+
 	log.Printf("[INFO] %s\n", baseUrl.String())
+
 	response, err := client.Get(baseUrl.String())
+
+	if err != nil {
+		return qvrProLogEntry
+	}
 
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -747,7 +779,9 @@ func (connection *Connection) CameraSnapshot(channelId string, imageTs int) ([]b
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
+
 	log.Printf("[INFO] %s\n", baseUrl.String())
+
 	response, err := client.Get(baseUrl.String())
 	if err != nil {
 		return nil, err

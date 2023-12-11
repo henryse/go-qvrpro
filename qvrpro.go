@@ -44,7 +44,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -530,11 +529,11 @@ const (
 // A [media frame] is either a video or an audio frame. The format of [media
 // frame] is the same as described in API "Live Streaming"
 
-func (connection *Connection) PlayGet(sessionId string, dataType int) bool {
+func (connection *Connection) PlayGet(writer http.ResponseWriter, sessionId string, dataType int) error {
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
 		log.Println("Malformed URL: ", err.Error())
-		return false
+		return err
 	}
 
 	baseUrl.Path = connection.PlayPath()
@@ -558,48 +557,39 @@ func (connection *Connection) PlayGet(sessionId string, dataType int) bool {
 		_ = Body.Close()
 	}(response.Body)
 
-	p := make([]byte, 4)
-
-	for {
-		n, err := response.Body.Read(p)
-		if err != nil {
-			if err == io.EOF {
-				fmt.Println(string(p[:n]))
-				break
-			}
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		fmt.Println(string(p[:n]))
+	// set the header as per original stream
+	for k, v := range response.Header {
+		writer.Header().Set(k, v[0])
 	}
 
-	return true
+	// stream the body to the client
+	written, err := io.Copy(writer, response.Body)
+
+	log.Printf("[INFO] Bytes written %d\n", written)
+
+	return err
 }
 
-func (connection *Connection) PlayFrame(channelId string, seekTime int) ([]byte, error) {
+func (connection *Connection) PlayFrame(writer http.ResponseWriter, channelId string, seekTime int) error {
 
 	sessionId, err := connection.CreateSessionId(channelId, seekTime)
 	if len(sessionId) == 0 {
-		return nil, err
+		return err
 	}
 
 	success, err := connection.PlaySeek(sessionId, seekTime)
 	if !success {
-		return nil, err
+		return err
 	}
 
 	success, err = connection.Play(sessionId)
 	if !success {
-		return nil, err
+		return err
 	}
 
-	success = connection.PlayGet(sessionId, DataTypeJPeg)
-	if !success {
-		return nil, errors.New("unable to get play data")
-	}
+	err = connection.PlayGet(writer, sessionId, DataTypeJPeg)
 
-	// TODO: Under construction
-	return []byte(fmt.Sprintf("{\"Not\":\"Finished\"}")), nil
+	return err
 }
 
 func (connection *Connection) LiveStream(writer http.ResponseWriter, channelId string, streamId string) error {
@@ -637,9 +627,11 @@ func (connection *Connection) LiveStream(writer http.ResponseWriter, channelId s
 	}
 
 	// stream the body to the client
-	_, _ = io.Copy(writer, response.Body)
+	written, err := io.Copy(writer, response.Body)
 
-	return nil
+	log.Printf("[INFO] Bytes written %d\n", written)
+
+	return err
 }
 
 type LogEntry struct {

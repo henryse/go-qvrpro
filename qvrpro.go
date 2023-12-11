@@ -213,11 +213,15 @@ func (connection *Connection) Logout() {
 		}
 		client := &http.Client{Transport: tr}
 
-		_, err = client.Get(baseUrl.String())
+		response, err := client.Get(baseUrl.String())
 
 		if err != nil {
 			log.Print(err.Error())
 		}
+
+		defer func(Body io.ReadCloser) {
+			_ = Body.Close()
+		}(response.Body)
 	}
 
 	connection.expire = 0
@@ -257,6 +261,10 @@ func (connection *Connection) Login(user string, password string) bool {
 		connection.Logout()
 		return false
 	}
+
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
 
 	body, err := io.ReadAll(response.Body)
 
@@ -312,6 +320,10 @@ func (connection *Connection) CameraList() ([]byte, error) {
 		return nil, err
 	}
 
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
+
 	body, err := io.ReadAll(response.Body)
 
 	if err != nil {
@@ -340,6 +352,14 @@ func (connection *Connection) CameraCapability() ([]byte, error) {
 	client := &http.Client{Transport: tr}
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
 
 	body, err := io.ReadAll(response.Body)
 
@@ -375,6 +395,10 @@ func (connection *Connection) CreateSessionId(channelId string, startTime int) (
 		response, err := client.Get(baseUrl.String())
 
 		if nil == err {
+			defer func(Body io.ReadCloser) {
+				_ = Body.Close()
+			}(response.Body)
+
 			bodyText, err := io.ReadAll(response.Body)
 			if nil == err {
 				v := strings.Split(string(bodyText), "\n")
@@ -422,6 +446,10 @@ func (connection *Connection) PlaySeek(sessionId string, seekTime int) (bool, er
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
 
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
+
 	bodyText, err := io.ReadAll(response.Body)
 
 	v := strings.Split(string(bodyText), "\n")
@@ -460,6 +488,10 @@ func (connection *Connection) Play(sessionId string) (bool, error) {
 	client := &http.Client{Transport: tr}
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
+
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
 
 	bodyText, err := io.ReadAll(response.Body)
 
@@ -522,6 +554,10 @@ func (connection *Connection) PlayGet(sessionId string, dataType int) bool {
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
 
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
+
 	p := make([]byte, 4)
 
 	for {
@@ -566,10 +602,10 @@ func (connection *Connection) PlayFrame(channelId string, seekTime int) ([]byte,
 	return []byte(fmt.Sprintf("{\"Not\":\"Finished\"}")), nil
 }
 
-func (connection *Connection) LiveStream(channelId string, streamId string) ([]byte, error) {
+func (connection *Connection) LiveStream(writer http.ResponseWriter, channelId string, streamId string) error {
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	baseUrl.Path = connection.StreamsPath()
@@ -587,23 +623,23 @@ func (connection *Connection) LiveStream(channelId string, streamId string) ([]b
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
 
-	p := make([]byte, 4)
-
-	for {
-		n, err := response.Body.Read(p)
-		if err != nil {
-			if err == io.EOF {
-				fmt.Println(string(p[:n]))
-				break
-			}
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		fmt.Println(string(p[:n]))
+	if err != nil {
+		return err
 	}
 
-	// TODO: need to figure this out.
-	return []byte(fmt.Sprintf("{\"Not\":\"Finished\"}")), nil
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
+
+	// set the header as per original stream
+	for k, v := range response.Header {
+		writer.Header().Set(k, v[0])
+	}
+
+	// stream the body to the client
+	_, _ = io.Copy(writer, response.Body)
+
+	return nil
 }
 
 type LogEntry struct {
@@ -683,6 +719,10 @@ func (connection *Connection) Logs(logType uint, startTime int64, maxResults int
 	log.Printf("[INFO] %s\n", baseUrl.String())
 	response, err := client.Get(baseUrl.String())
 
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
+
 	body, err := io.ReadAll(response.Body)
 	var qvrResponse LogsResponse
 	err = json.Unmarshal(body, &qvrResponse)
@@ -720,6 +760,10 @@ func (connection *Connection) CameraSnapshot(channelId string, imageTs int) ([]b
 	if err != nil {
 		return nil, err
 	}
+
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
 
 	body, _ := io.ReadAll(response.Body)
 

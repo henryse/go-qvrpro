@@ -35,6 +35,7 @@ package qvrpro
 */
 import "C"
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"encoding/xml"
@@ -42,6 +43,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -114,60 +116,217 @@ func QvrApplicationParse(app string) QvrApplication {
 	return QvrUnknown
 }
 
+// Connection is safe to share between goroutines. The url, timeout and
+// qvrApp are written once by Create and only read afterwards, the
+// session id is guarded by mutex, and loginMutex serialises the login
+// itself so that a burst of callers produces one session rather than one
+// each.
 type Connection struct {
 	url     string
-	sid     string
-	expire  int64
 	timeout int64
 	qvrApp  QvrApplication
+
+	mutex  sync.Mutex
+	sid    string
+	expire int64
+
+	loginMutex sync.Mutex
+
+	// client bounds the whole exchange, streamClient is for the calls
+	// whose body is a stream and so has no business being cut short.
+	client       *http.Client
+	streamClient *http.Client
 }
 
-var errorCodes map[int]string
+// The play API reports failures in the body as an error code rather
+// than as an HTTP status.
+var errorCodes = map[int]string{
+	convertHexToInt("0x93010002"): "failed to open play session",
+	convertHexToInt("0x93010006"): "sid authentication failed",
+	convertHexToInt("0x93010007"): "failed to open session (session num full)",
+	convertHexToInt("0x93010102"): "start_time, end_time or time_val not specified",
+	convertHexToInt("0x93010103"): "channel_id not specified",
+	convertHexToInt("0x93010104"): "session_id not specified",
+	convertHexToInt("0x93010107"): "seek_time not specified",
+	convertHexToInt("0x93010108"): "session_id too long",
+	convertHexToInt("0x93010109"): "speed_num not specified",
+	convertHexToInt("0x9301010B"): "enable not specified",
+	convertHexToInt("0x93010201"): "failed to control stream",
+	convertHexToInt("0x93010202"): "session not found",
+	convertHexToInt("0x93010203"): "session is being closed",
+	convertHexToInt("0x93010204"): "no files found",
+	convertHexToInt("0x93010003"): "cmd is illegal",
+	convertHexToInt("0x93010004"): "insufficient memory",
+	convertHexToInt("0x93000000"): "Illegal Args",
+	convertHexToInt("0x93000001"): "Rejected Connection (DDOS)",
+	convertHexToInt("0x93000002"): "Exceeded Max Connection number",
+	convertHexToInt("0x93000003"): "Stream not ready",
+	convertHexToInt("0x93000004"): "Failed to start the stream",
+	convertHexToInt("0x93000005"): "Auth failed",
+}
 
-var apiVersion = "1.2.0"
-var apiPlayVersion = "v1"
+const apiVersion = "1.2.0"
+const apiPlayVersion = "v1"
 
-var singletonConnection *Connection
-var onceConnection sync.Once
+// Nothing here waited for anything, a NAS that accepted the connection
+// and then went quiet would hang the caller for good.
+const (
+	dialTimeout           = 10 * time.Second
+	tlsHandshakeTimeout   = 10 * time.Second
+	responseHeaderTimeout = 30 * time.Second
+
+	// requestTimeout covers the request and the whole response, it is
+	// not applied to the streaming calls.
+	requestTimeout = 60 * time.Second
+)
+
+// QNAP serves the API with a self signed certificate.
+func newTransport() *http.Transport {
+	return &http.Transport{
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		DialContext:           (&net.Dialer{Timeout: dialTimeout}).DialContext,
+		TLSHandshakeTimeout:   tlsHandshakeTimeout,
+		ResponseHeaderTimeout: responseHeaderTimeout,
+		MaxIdleConnsPerHost:   4,
+	}
+}
+
+// jpegStartOfImage is the marker every JPEG frame opens with.
+var jpegStartOfImage = []byte{0xFF, 0xD8, 0xFF}
+
+// Connections are cached per server and application so that callers
+// which ask for the same NAS share a session id, asking for a second
+// NAS returns a second connection.
+var (
+	connectionsMutex sync.Mutex
+	connections      = make(map[string]*Connection)
+)
 
 //goland:noinspection GoUnusedExportedFunction
 func Create(url string, qvrApp QvrApplication, timeout int64) *Connection {
-	onceConnection.Do(func() {
-		singletonConnection = &Connection{
-			url:     url,
-			expire:  0,
-			timeout: timeout,
-			sid:     "",
-			qvrApp:  qvrApp,
+	key := fmt.Sprintf("%s/%s", url, qvrApp)
+
+	connectionsMutex.Lock()
+	defer connectionsMutex.Unlock()
+
+	connection, found := connections[key]
+
+	if !found {
+		// One transport per server, so that the connections to the NAS
+		// are pooled and reused instead of built per request.
+		transport := newTransport()
+
+		connection = &Connection{
+			url:          url,
+			expire:       0,
+			timeout:      timeout,
+			sid:          "",
+			qvrApp:       qvrApp,
+			client:       &http.Client{Transport: transport, Timeout: requestTimeout},
+			streamClient: &http.Client{Transport: transport},
 		}
 
-		errorCodes = make(map[int]string)
+		connections[key] = connection
+	}
 
-		errorCodes[convertHexToInt("0x93010002")] = "failed to open play session"
-		errorCodes[convertHexToInt("0x93010006")] = "sid authentication failed"
-		errorCodes[convertHexToInt("0x93010007")] = "failed to open session (session num full)"
-		errorCodes[convertHexToInt("0x93010102")] = "start_time, end_time or time_val not specified"
-		errorCodes[convertHexToInt("0x93010103")] = "channel_id not specified"
-		errorCodes[convertHexToInt("0x93010104")] = "session_id not specified"
-		errorCodes[convertHexToInt("0x93010107")] = "seek_time not specified"
-		errorCodes[convertHexToInt("0x93010108")] = "session_id too long"
-		errorCodes[convertHexToInt("0x93010109")] = "speed_num not specified"
-		errorCodes[convertHexToInt("0x9301010B")] = "enable not specified"
-		errorCodes[convertHexToInt("0x93010201")] = "failed to control stream"
-		errorCodes[convertHexToInt("0x93010202")] = "session not found"
-		errorCodes[convertHexToInt("0x93010203")] = "session is being closed"
-		errorCodes[convertHexToInt("0x93010204")] = "no files found"
-		errorCodes[convertHexToInt("0x93010003")] = "cmd is illegal"
-		errorCodes[convertHexToInt("0x93010004")] = "insufficient memory"
-		errorCodes[convertHexToInt("0x93000000")] = "Illegal Args"
-		errorCodes[convertHexToInt("0x93000001")] = "Rejected Connection (DDOS)"
-		errorCodes[convertHexToInt("0x93000002")] = "Exceeded Max Connection number"
-		errorCodes[convertHexToInt("0x93000003")] = "Stream not ready"
-		errorCodes[convertHexToInt("0x93000004")] = "Failed to start the stream"
-		errorCodes[convertHexToInt("0x93000005")] = "Auth failed"
-	})
+	return connection
+}
 
-	return singletonConnection
+// sessionId returns the session id granted by the last login.
+func (connection *Connection) sessionId() string {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+
+	return connection.sid
+}
+
+// hasSession reports whether a login is still worth trusting.
+func (connection *Connection) hasSession() bool {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+
+	return len(connection.sid) > 0 && connection.expire > time.Now().Unix()
+}
+
+func (connection *Connection) setSession(sid string, expire int64) {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+
+	connection.sid = sid
+	connection.expire = expire
+}
+
+// takeSession clears the session and hands back what it was, so that a
+// logout can hand it in without holding the lock over the request.
+func (connection *Connection) takeSession() string {
+	connection.mutex.Lock()
+	defer connection.mutex.Unlock()
+
+	sid := connection.sid
+
+	connection.sid = ""
+	connection.expire = 0
+
+	return sid
+}
+
+// summarize trims a response body down to something loggable, the
+// bodies are either short error documents or whole JPEG frames.
+func summarize(body []byte) string {
+	const limit = 256
+
+	text := strings.TrimSpace(string(body))
+
+	if len(text) > limit {
+		return text[:limit]
+	}
+
+	return text
+}
+
+// readBody reads and closes a response, reporting anything the NAS did
+// not answer with a 200 as an error.
+func readBody(response *http.Response) ([]byte, error) {
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.StatusCode != http.StatusOK {
+		return body, fmt.Errorf("request failed with status %d: %s", response.StatusCode, summarize(body))
+	}
+
+	return body, nil
+}
+
+// The play API answers in plain text, the first line is the CGI
+// version, the second is the result code and "open" puts the session id
+// on the third. A code of zero means the request worked.
+func parsePlayResponse(body []byte) ([]string, error) {
+	lines := strings.Split(string(body), "\n")
+
+	if len(lines) < 2 {
+		return lines, fmt.Errorf("play response has no result code: %s", summarize(body))
+	}
+
+	code, err := strconv.Atoi(strings.TrimSpace(lines[1]))
+	if err != nil {
+		return lines, fmt.Errorf("play response has an unreadable result code: %s", summarize(body))
+	}
+
+	if code == 0 {
+		return lines, nil
+	}
+
+	if message, exists := errorCodes[code]; exists {
+		return lines, errors.New(message)
+	}
+
+	return lines, fmt.Errorf("play request failed with code %d", code)
 }
 
 func (connection *Connection) PlayPath() string {
@@ -195,42 +354,47 @@ func (connection *Connection) CameraSnapshotPath(channelId string) string {
 }
 
 func (connection *Connection) Logout() {
-	baseUrl, err := url.Parse(connection.url)
+	sid := connection.takeSession()
 
-	if err != nil {
-		log.Println("Malformed URL: ", err.Error())
-	} else {
-		baseUrl.Path = "/cgi-bin/authLogin.cgi"
-
-		params := url.Values{}
-		params.Add("logout", "1")
-		params.Add("sid", connection.sid)
-
-		baseUrl.RawQuery = params.Encode()
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-
-		log.Printf("[INFO] %s\n", baseUrl.String())
-
-		response, err := client.Get(baseUrl.String())
-		if err != nil {
-			log.Print(err.Error())
-		}
-
-		defer func(Body io.ReadCloser) {
-			_ = Body.Close()
-		}(response.Body)
+	// Nothing was ever granted, so there is nothing to hand back. Login
+	// calls us on its failure paths, this keeps those quiet.
+	if len(sid) == 0 {
+		return
 	}
 
-	connection.expire = 0
-	connection.sid = ""
+	baseUrl, err := url.Parse(connection.url)
+	if err != nil {
+		log.Println("Malformed URL: ", err.Error())
+		return
+	}
+
+	baseUrl.Path = "/cgi-bin/authLogin.cgi"
+
+	params := url.Values{}
+	params.Add("logout", "1")
+	params.Add("sid", sid)
+
+	baseUrl.RawQuery = params.Encode()
+	log.Printf("[INFO] %s\n", baseUrl.String())
+
+	response, err := connection.client.Get(baseUrl.String())
+	if err != nil {
+		log.Print(err.Error())
+		return
+	}
+
+	if _, err = readBody(response); err != nil {
+		log.Print(err.Error())
+	}
 }
 
 func (connection *Connection) Login(user string, password string) bool {
+	// One login at a time, everybody else waits here and then finds the
+	// session it granted.
+	connection.loginMutex.Lock()
+	defer connection.loginMutex.Unlock()
 
-	if len(connection.sid) > 0 && connection.expire > time.Now().Unix() {
+	if connection.hasSession() {
 		return true
 	}
 
@@ -249,14 +413,9 @@ func (connection *Connection) Login(user string, password string) bool {
 	params.Add("user", user)
 
 	baseUrl.RawQuery = params.Encode()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
 		log.Println("Get Failed: ", err.Error())
 		connection.Logout()
@@ -288,8 +447,7 @@ func (connection *Connection) Login(user string, password string) bool {
 	}
 
 	if qdoc.AuthPassed != 0 {
-		connection.sid = qdoc.AuthSid
-		connection.expire = time.Now().Unix() + connection.timeout
+		connection.setSession(qdoc.AuthSid, time.Now().Unix()+connection.timeout)
 	} else {
 		log.Print("Auth Failed")
 	}
@@ -306,18 +464,13 @@ func (connection *Connection) CameraList() ([]byte, error) {
 	baseUrl.Path = connection.CameraListPath()
 
 	params := url.Values{}
-	params.Add("sid", connection.sid)
+	params.Add("sid", connection.sessionId())
 	params.Add("ver", apiVersion)
 
 	baseUrl.RawQuery = params.Encode()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
 		return nil, err
 	}
@@ -343,19 +496,14 @@ func (connection *Connection) CameraCapability() ([]byte, error) {
 	baseUrl.Path = connection.CameraCapabilityPath()
 
 	params := url.Values{}
-	params.Add("sid", connection.sid)
+	params.Add("sid", connection.sessionId())
 	params.Add("ver", apiVersion)
 	params.Add("act", "get_camera_capability")
 
 	baseUrl.RawQuery = params.Encode()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
 		return nil, err
 	}
@@ -372,62 +520,62 @@ func (connection *Connection) CameraCapability() ([]byte, error) {
 	return body, nil
 }
 
-func (connection *Connection) CreateSessionId(channelId string, startTime int) (string, error) {
+// CreateSessionId opens a playback session at startTime, which is a UTC
+// timestamp in milliseconds.
+func (connection *Connection) CreateSessionId(channelId string, startTime int64) (string, error) {
 	baseUrl, err := url.Parse(connection.url)
-	if err == nil {
-		baseUrl.Path = connection.PlayPath()
-
-		params := url.Values{}
-		params.Add("cmd", "open")
-		params.Add("sid", connection.sid)
-		params.Add("ver", "v1")
-
-		params.Add("ch_sid", channelId)
-		params.Add("start_time", strconv.Itoa(startTime))
-		params.Add("query_type", "0")
-		params.Add("recording_type", "0")
-		params.Add("stream", "0")
-		params.Add("data_type", "0")
-
-		baseUrl.RawQuery = params.Encode()
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-
-		log.Printf("[INFO] %s\n", baseUrl.String())
-
-		response, err := client.Get(baseUrl.String())
-
-		if nil == err {
-			defer func(Body io.ReadCloser) {
-				_ = Body.Close()
-			}(response.Body)
-
-			bodyText, err := io.ReadAll(response.Body)
-			if nil == err {
-				v := strings.Split(string(bodyText), "\n")
-
-				code, _ := strconv.Atoi(v[1])
-				if code == 0 {
-					return v[2], nil
-				}
-				message, exists := errorCodes[code]
-				if exists {
-					log.Println(message)
-					err = errors.New(message)
-				}
-			} else {
-				log.Println(err.Error())
-			}
-		} else {
-			log.Println(err.Error())
-		}
+	if err != nil {
+		log.Println("Malformed URL: ", err.Error())
+		return "", err
 	}
-	return "", err
+
+	baseUrl.Path = connection.PlayPath()
+
+	params := url.Values{}
+	params.Add("cmd", "open")
+	params.Add("sid", connection.sessionId())
+	params.Add("ver", apiPlayVersion)
+
+	params.Add("ch_sid", channelId)
+	params.Add("start_time", strconv.FormatInt(startTime, 10))
+	params.Add("query_type", "0")
+	params.Add("recording_type", "0")
+	params.Add("stream", "0")
+	params.Add("data_type", "0")
+
+	baseUrl.RawQuery = params.Encode()
+	log.Printf("[INFO] %s\n", baseUrl.String())
+
+	response, err := connection.client.Get(baseUrl.String())
+	if err != nil {
+		log.Println(err.Error())
+		return "", err
+	}
+
+	body, err := readBody(response)
+	if err != nil {
+		log.Println(err.Error())
+		return "", err
+	}
+
+	lines, err := parsePlayResponse(body)
+	if err != nil {
+		log.Println(err.Error())
+		return "", err
+	}
+
+	if len(lines) < 3 || len(strings.TrimSpace(lines[2])) == 0 {
+		err = fmt.Errorf("play open response has no session id: %s", summarize(body))
+		log.Println(err.Error())
+		return "", err
+	}
+
+	return strings.TrimSpace(lines[2]), nil
 }
 
-func (connection *Connection) PlaySeek(sessionId string, seekTime int) (bool, error) {
+// PlaySeek moves a playback session to seekTime, which is a UTC
+// timestamp in milliseconds.
+func (connection *Connection) PlaySeek(sessionId string, seekTime int64) (bool, error) {
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
 		log.Println("Malformed URL: ", err.Error())
@@ -438,42 +586,30 @@ func (connection *Connection) PlaySeek(sessionId string, seekTime int) (bool, er
 
 	params := url.Values{}
 	params.Add("cmd", "seek")
-	params.Add("sid", connection.sid)
+	params.Add("sid", connection.sessionId())
 	params.Add("ver", apiPlayVersion)
 	params.Add("session", sessionId)
-	params.Add("seek_time", strconv.Itoa(seekTime))
+	params.Add("seek_time", strconv.FormatInt(seekTime, 10))
 
 	baseUrl.RawQuery = params.Encode()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	response, err := connection.client.Get(baseUrl.String())
 
 	if err != nil {
 		return false, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(response.Body)
-
-	bodyText, err := io.ReadAll(response.Body)
-
-	v := strings.Split(string(bodyText), "\n")
-
-	code, _ := strconv.Atoi(v[1])
-	if code != 0 {
-		message, exists := errorCodes[code]
-		if exists {
-			return false, errors.New(message)
-		}
+	body, err := readBody(response)
+	if err != nil {
+		return false, err
 	}
 
-	return code == 0, nil
+	if _, err = parsePlayResponse(body); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (connection *Connection) Play(sessionId string) (bool, error) {
@@ -487,43 +623,31 @@ func (connection *Connection) Play(sessionId string) (bool, error) {
 
 	params := url.Values{}
 	params.Add("cmd", "play")
-	params.Add("sid", connection.sid)
+	params.Add("sid", connection.sessionId())
 	params.Add("ver", apiPlayVersion)
 	params.Add("session", sessionId)
 
 	baseUrl.RawQuery = params.Encode()
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	response, err := connection.client.Get(baseUrl.String())
 
 	if err != nil {
 		return false, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(response.Body)
-
-	bodyText, err := io.ReadAll(response.Body)
-
-	v := strings.Split(string(bodyText), "\n")
-
-	code, _ := strconv.Atoi(v[1])
-	if code != 0 {
-		message, exists := errorCodes[code]
-		if exists {
-			log.Println(message)
-			return false, errors.New(message)
-		}
+	body, err := readBody(response)
+	if err != nil {
+		return false, err
 	}
 
-	return code == 0, nil
+	if _, err = parsePlayResponse(body); err != nil {
+		log.Println(err.Error())
+		return false, err
+	}
+
+	return true, nil
 }
 
 //goland:noinspection GoUnusedConst
@@ -558,20 +682,17 @@ func (connection *Connection) PlayGet(writer http.ResponseWriter, sessionId stri
 
 	params := url.Values{}
 	params.Add("cmd", "get")
-	params.Add("sid", connection.sid)
+	params.Add("sid", connection.sessionId())
 	params.Add("ver", apiPlayVersion)
 	params.Add("session", sessionId)
 	params.Add("data_type", strconv.Itoa(dataType))
 
 	baseUrl.RawQuery = params.Encode()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	// A source data_type keeps sending frames, so this one is read
+	// without a deadline on the body.
+	response, err := connection.streamClient.Get(baseUrl.String())
 
 	if err != nil {
 		return err
@@ -594,26 +715,67 @@ func (connection *Connection) PlayGet(writer http.ResponseWriter, sessionId stri
 	return err
 }
 
-func (connection *Connection) PlayFrame(writer http.ResponseWriter, channelId string, seekTime int) error {
-
-	sessionId, err := connection.CreateSessionId(channelId, seekTime)
-	if len(sessionId) == 0 {
+// PlayClose ends a playback session. QVR only allows a few sessions to
+// be open at a time, "failed to open session (session num full)" is what
+// it answers once they have been used up, so every session that is
+// opened has to be handed back.
+func (connection *Connection) PlayClose(sessionId string) error {
+	baseUrl, err := url.Parse(connection.url)
+	if err != nil {
+		log.Println("Malformed URL: ", err.Error())
 		return err
 	}
 
-	success, err := connection.PlaySeek(sessionId, seekTime)
-	if !success {
+	baseUrl.Path = connection.PlayPath()
+
+	params := url.Values{}
+	params.Add("cmd", "close")
+	params.Add("sid", connection.sessionId())
+	params.Add("ver", apiPlayVersion)
+	params.Add("session", sessionId)
+
+	baseUrl.RawQuery = params.Encode()
+	log.Printf("[INFO] %s\n", baseUrl.String())
+
+	response, err := connection.client.Get(baseUrl.String())
+
+	if err != nil {
 		return err
 	}
 
-	success, err = connection.Play(sessionId)
-	if !success {
+	body, err := readBody(response)
+	if err != nil {
 		return err
 	}
 
-	err = connection.PlayGet(writer, sessionId, DataTypeJPeg)
+	_, err = parsePlayResponse(body)
 
 	return err
+}
+
+// PlayFrame writes the recorded frame at seekTime, which is a UTC
+// timestamp in milliseconds.
+func (connection *Connection) PlayFrame(writer http.ResponseWriter, channelId string, seekTime int64) error {
+	sessionId, err := connection.CreateSessionId(channelId, seekTime)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := connection.PlayClose(sessionId); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	if _, err = connection.PlaySeek(sessionId, seekTime); err != nil {
+		return err
+	}
+
+	if _, err = connection.Play(sessionId); err != nil {
+		return err
+	}
+
+	return connection.PlayGet(writer, sessionId, DataTypeJPeg)
 }
 
 func (connection *Connection) LiveStream(writer http.ResponseWriter, channelId string, streamId string) error {
@@ -625,19 +787,16 @@ func (connection *Connection) LiveStream(writer http.ResponseWriter, channelId s
 	baseUrl.Path = connection.StreamsPath()
 
 	params := url.Values{}
-	params.Add("sid", connection.sid)
+	params.Add("sid", connection.sessionId())
 	params.Add("ch_sid", channelId)
 	params.Add("stream_id", streamId)
 
 	baseUrl.RawQuery = params.Encode()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	// A live stream runs until the caller goes away, so this one is
+	// read without a deadline on the body.
+	response, err := connection.streamClient.Get(baseUrl.String())
 
 	if err != nil {
 		return err
@@ -705,63 +864,66 @@ const (
 	SurveillanceSettingsLogType    = 5
 )
 
-func (connection *Connection) Logs(logType uint, startTime int64, maxResults int) []LogEntry {
-	qvrProLogEntry := make([]LogEntry, 0)
-
+// Logs returns up to maxResults log entries recorded since startTime,
+// which is a UTC timestamp in milliseconds, use zero for no lower bound.
+// The entries are the oldest ones in the window, they are sorted by
+// ascending time.
+func (connection *Connection) Logs(logType uint, startTime int64, maxResults int) ([]LogEntry, error) {
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
-		// return errorResponse(http.StatusBadRequest, err.Error()), http.StatusBadRequest
-		return qvrProLogEntry
+		return nil, err
 	}
 
 	baseUrl.Path = connection.LogsPath()
 
 	params := url.Values{}
-	params.Add("sid", connection.sid)
+	params.Add("sid", connection.sessionId())
 	if AllLogType != logType {
 		params.Add("log_type", strconv.Itoa(int(logType)))
 	}
 	if startTime != 0 {
-		params.Add("start_time", strconv.Itoa(int(startTime)))
-
+		params.Add("start_time", strconv.FormatInt(startTime, 10))
 	}
 	params.Add("sort_field", "time")
 	params.Add("max_results", strconv.Itoa(maxResults))
 	params.Add("dir", "ASC")
 
 	baseUrl.RawQuery = params.Encode()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	response, err := connection.client.Get(baseUrl.String())
 
 	if err != nil {
-		return qvrProLogEntry
+		return nil, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(response.Body)
-
-	body, err := io.ReadAll(response.Body)
-	var qvrResponse LogsResponse
-	err = json.Unmarshal(body, &qvrResponse)
+	body, err := readBody(response)
 	if err != nil {
-		return qvrProLogEntry
+		return nil, err
+	}
+
+	var qvrResponse LogsResponse
+	if err = json.Unmarshal(body, &qvrResponse); err != nil {
+		return nil, fmt.Errorf("unable to read the log response: %s", summarize(body))
+	}
+
+	// The logs CGI reports its own result in the body, an empty item
+	// list on its own is a perfectly good answer.
+	if qvrResponse.Code != 0 && qvrResponse.Code != http.StatusOK {
+		return nil, fmt.Errorf("log request failed with code %d: %s", qvrResponse.Code, qvrResponse.Mesg)
 	}
 
 	for i := range qvrResponse.Items {
 		qvrResponse.Items[i].Application = connection.qvrApp
 	}
 
-	return qvrResponse.Items
+	return qvrResponse.Items, nil
 }
 
-func (connection *Connection) CameraSnapshot(channelId string, imageTs int) ([]byte, error) {
+// CameraSnapshot returns the JPEG the camera recorded at imageTs, which
+// is a UTC timestamp in milliseconds. QVR returns the current frame when
+// imageTs is zero, and only honours it from API version 1.2.0 onwards.
+func (connection *Connection) CameraSnapshot(channelId string, imageTs int64) ([]byte, error) {
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
 		return nil, err
@@ -770,28 +932,30 @@ func (connection *Connection) CameraSnapshot(channelId string, imageTs int) ([]b
 	baseUrl.Path = connection.CameraSnapshotPath(channelId)
 
 	params := url.Values{}
-	params.Add("sid", connection.sid)
+	params.Add("sid", connection.sessionId())
 	params.Add("ver", apiVersion)
-	params.Add("ts", strconv.Itoa(imageTs))
+	if imageTs != 0 {
+		params.Add("image_ts", strconv.FormatInt(imageTs, 10))
+	}
 
 	baseUrl.RawQuery = params.Encode()
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
 	log.Printf("[INFO] %s\n", baseUrl.String())
 
-	response, err := client.Get(baseUrl.String())
+	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
 		return nil, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(response.Body)
+	body, err := readBody(response)
+	if err != nil {
+		return nil, err
+	}
 
-	body, _ := io.ReadAll(response.Body)
+	// QVR reports a refused snapshot as a JSON error document with a
+	// 200, so the frame has to be recognised before it is handed back.
+	if !bytes.HasPrefix(body, jpegStartOfImage) {
+		return nil, fmt.Errorf("snapshot of %s is not a jpeg: %s", channelId, summarize(body))
+	}
 
 	return body, nil
 }

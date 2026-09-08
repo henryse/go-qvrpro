@@ -26,14 +26,6 @@
 
 package qvrpro
 
-/*
-   #include <stdlib.h>
-
-   int hexToInt(char *hexString){
-       return strtol(hexString, NULL, 0);
-   }
-*/
-import "C"
 import (
 	"bytes"
 	"crypto/tls"
@@ -50,16 +42,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 )
-
-func convertHexToInt(hexString string) int {
-	p := C.CString(hexString)
-	defer C.free(unsafe.Pointer(p))
-
-	n := C.hexToInt(p)
-	return int(n)
-}
 
 type ShutDownInfo struct {
 	XMLName   xml.Name `xml:"shutdown_info"`
@@ -101,8 +84,8 @@ type QvrApplication string
 //goland:noinspection GoUnusedConst
 const (
 	QvrPro     QvrApplication = "qvrpro"
-	QvrElite                  = "qvrelite"
-	QvrUnknown                = "unknown"
+	QvrElite   QvrApplication = "qvrelite"
+	QvrUnknown QvrApplication = "unknown"
 )
 
 //goland:noinspection GoUnusedExportedFunction
@@ -116,8 +99,8 @@ func QvrApplicationParse(app string) QvrApplication {
 	return QvrUnknown
 }
 
-// Connection is safe to share between goroutines. The url, timeout and
-// qvrApp are written once by Create and only read afterwards, the
+// Connection is safe to share between goroutines. The url, timeout, and
+// qvrApp are written once by Create and only read afterward, the
 // session id is guarded by mutex, and loginMutex serialises the login
 // itself so that a burst of callers produces one session rather than one
 // each.
@@ -139,30 +122,31 @@ type Connection struct {
 }
 
 // The play API reports failures in the body as an error code rather
-// than as an HTTP status.
-var errorCodes = map[int]string{
-	convertHexToInt("0x93010002"): "failed to open play session",
-	convertHexToInt("0x93010006"): "sid authentication failed",
-	convertHexToInt("0x93010007"): "failed to open session (session num full)",
-	convertHexToInt("0x93010102"): "start_time, end_time or time_val not specified",
-	convertHexToInt("0x93010103"): "channel_id not specified",
-	convertHexToInt("0x93010104"): "session_id not specified",
-	convertHexToInt("0x93010107"): "seek_time not specified",
-	convertHexToInt("0x93010108"): "session_id too long",
-	convertHexToInt("0x93010109"): "speed_num not specified",
-	convertHexToInt("0x9301010B"): "enable not specified",
-	convertHexToInt("0x93010201"): "failed to control stream",
-	convertHexToInt("0x93010202"): "session not found",
-	convertHexToInt("0x93010203"): "session is being closed",
-	convertHexToInt("0x93010204"): "no files found",
-	convertHexToInt("0x93010003"): "cmd is illegal",
-	convertHexToInt("0x93010004"): "insufficient memory",
-	convertHexToInt("0x93000000"): "Illegal Args",
-	convertHexToInt("0x93000001"): "Rejected Connection (DDOS)",
-	convertHexToInt("0x93000002"): "Exceeded Max Connection number",
-	convertHexToInt("0x93000003"): "Stream not ready",
-	convertHexToInt("0x93000004"): "Failed to start the stream",
-	convertHexToInt("0x93000005"): "Auth failed",
+// than as an HTTP status. The codes run past the top of a signed 32-bit
+// int, hence the int64.
+var errorCodes = map[int64]string{
+	0x93010002: "failed to open play session",
+	0x93010006: "sid authentication failed",
+	0x93010007: "failed to open session (session num full)",
+	0x93010102: "start_time, end_time or time_val not specified",
+	0x93010103: "channel_id not specified",
+	0x93010104: "session_id not specified",
+	0x93010107: "seek_time not specified",
+	0x93010108: "session_id too long",
+	0x93010109: "speed_num not specified",
+	0x9301010B: "enable not specified",
+	0x93010201: "failed to control stream",
+	0x93010202: "session not found",
+	0x93010203: "session is being closed",
+	0x93010204: "no files found",
+	0x93010003: "cmd is illegal",
+	0x93010004: "insufficient memory",
+	0x93000000: "Illegal Args",
+	0x93000001: "Rejected Connection (DDOS)",
+	0x93000002: "Exceeded Max Connection number",
+	0x93000003: "Stream not ready",
+	0x93000004: "Failed to start the stream",
+	0x93000005: "Auth failed",
 }
 
 const apiVersion = "1.2.0"
@@ -180,7 +164,7 @@ const (
 	requestTimeout = 60 * time.Second
 )
 
-// QNAP serves the API with a self signed certificate.
+// QNAP serves the API with a self-signed certificate.
 func newTransport() *http.Transport {
 	return &http.Transport{
 		TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
@@ -270,6 +254,35 @@ func (connection *Connection) takeSession() string {
 	return sid
 }
 
+// The login carries the account password, and every other call carries
+// the session id, neither belongs in a log file. The playback session id
+// is left alone, it is scoped to one playback, and it is the thing worth
+// following when a playback misbehaves.
+var redactedParams = []string{"pwd", "sid"}
+
+// redact returns the url as text with the secrets replaced, the url
+// itself is left untouched.
+func redact(target *url.URL) string {
+	query := target.Query()
+	hidden := false
+
+	for _, name := range redactedParams {
+		if len(query.Get(name)) > 0 {
+			query.Set(name, "*****")
+			hidden = true
+		}
+	}
+
+	if !hidden {
+		return target.String()
+	}
+
+	safe := *target
+	safe.RawQuery = query.Encode()
+
+	return safe.String()
+}
+
 // summarize trims a response body down to something loggable, the
 // bodies are either short error documents or whole JPEG frames.
 func summarize(body []byte) string {
@@ -304,7 +317,7 @@ func readBody(response *http.Response) ([]byte, error) {
 }
 
 // The play API answers in plain text, the first line is the CGI
-// version, the second is the result code and "open" puts the session id
+// version, the second is the result code, and "open" puts the session id
 // on the third. A code of zero means the request worked.
 func parsePlayResponse(body []byte) ([]string, error) {
 	lines := strings.Split(string(body), "\n")
@@ -313,7 +326,9 @@ func parsePlayResponse(body []byte) ([]string, error) {
 		return lines, fmt.Errorf("play response has no result code: %s", summarize(body))
 	}
 
-	code, err := strconv.Atoi(strings.TrimSpace(lines[1]))
+	// A base of zero takes the code. However, QVR chose to write it, the
+	// documented "0x…" form or plain decimal.
+	code, err := strconv.ParseInt(strings.TrimSpace(lines[1]), 0, 64)
 	if err != nil {
 		return lines, fmt.Errorf("play response has an unreadable result code: %s", summarize(body))
 	}
@@ -326,7 +341,7 @@ func parsePlayResponse(body []byte) ([]string, error) {
 		return lines, errors.New(message)
 	}
 
-	return lines, fmt.Errorf("play request failed with code %d", code)
+	return lines, fmt.Errorf("play request failed with code 0x%08X", code)
 }
 
 func (connection *Connection) PlayPath() string {
@@ -375,7 +390,7 @@ func (connection *Connection) Logout() {
 	params.Add("sid", sid)
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
@@ -413,7 +428,7 @@ func (connection *Connection) Login(user string, password string) bool {
 	params.Add("user", user)
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
@@ -430,18 +445,15 @@ func (connection *Connection) Login(user string, password string) bool {
 
 	if nil != err {
 		log.Print(err)
-		log.Println(string(body))
 		connection.Logout()
 		return false
 	}
 
+	// The body holds the session id on the way in, so only an
+	// unreadable one is worth logging.
 	var qdoc QDocRoot
-	log.Println(string(body))
-	err = xml.Unmarshal(body, &qdoc)
-
-	if nil != err {
-		log.Print(err)
-		log.Println(string(body))
+	if err = xml.Unmarshal(body, &qdoc); nil != err {
+		log.Printf("[ERROR] unable to read the login response: %s", summarize(body))
 		connection.Logout()
 		return false
 	}
@@ -468,7 +480,7 @@ func (connection *Connection) CameraList() ([]byte, error) {
 	params.Add("ver", apiVersion)
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
@@ -501,7 +513,7 @@ func (connection *Connection) CameraCapability() ([]byte, error) {
 	params.Add("act", "get_camera_capability")
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
@@ -539,12 +551,17 @@ func (connection *Connection) CreateSessionId(channelId string, startTime int64)
 	params.Add("ch_sid", channelId)
 	params.Add("start_time", strconv.FormatInt(startTime, 10))
 	params.Add("query_type", "0")
-	params.Add("recording_type", "0")
-	params.Add("stream", "0")
-	params.Add("data_type", "0")
+	params.Add("recording_type", strconv.Itoa(RecordingTypeAllFiles))
+	params.Add("data_type", strconv.Itoa(DataTypeJPeg))
+
+	// The parameter table calls this one "stream_id" while the worked
+	// example in the same document calls it "stream". Sending both is
+	// harmless; a CGI ignores what it does not recognize.
+	params.Add("stream", strconv.Itoa(StreamIdFirst))
+	params.Add("stream_id", strconv.Itoa(StreamIdFirst))
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
@@ -592,7 +609,7 @@ func (connection *Connection) PlaySeek(sessionId string, seekTime int64) (bool, 
 	params.Add("seek_time", strconv.FormatInt(seekTime, 10))
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 
@@ -629,7 +646,7 @@ func (connection *Connection) Play(sessionId string) (bool, error) {
 
 	baseUrl.RawQuery = params.Encode()
 
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 
@@ -652,14 +669,23 @@ func (connection *Connection) Play(sessionId string) (bool, error) {
 
 //goland:noinspection GoUnusedConst
 const (
+	RecordingTypeAllFiles      = 0
 	RecordingTypeOnlyAlarmFile = 1
-	RecordingTypeNormalFile    = 1
-	DataTypeJPeg               = 0
-	DataTypeSource             = 1
+	RecordingTypeNormalFile    = 2
+
+	DataTypeJPeg   = 0
+	DataTypeSource = 1
+
+	// StreamIdFirst Stream ids, the camera list reports which ones a channel has.
+	StreamIdFirst  = 0
+	StreamIdSecond = 2
+	StreamIdThird  = 3
+	StreamIdNone   = 16
+	StreamIdAll    = 255
 )
 
 // PlayGet
-// 1. If data_type (parameter in Step 1) is '0'/DataTypeJPeg (JPEG)
+// 1. If data_type (parameter in Step 1) is '0'/DataTypeJPeg (JPEG),
 // The frame is only a video frame
 // ---
 // [channel_name]\n
@@ -667,7 +693,7 @@ const (
 // [jpeg image length]\n // INT
 // [jpeg data] // BINARY, binary data of length [jpeg image length]
 // ---
-// 2. If data_type (parameter in Step 1) is '1'/DataTypeSource (source format of recording files)
+// 2. If data_type (parameter in Step 1) is '1'/DataTypeSource (source format of recording files),
 // A [media frame] is either a video or an audio frame. The format of [media
 // frame] is the same as described in API "Live Streaming"
 
@@ -688,7 +714,7 @@ func (connection *Connection) PlayGet(writer http.ResponseWriter, sessionId stri
 	params.Add("data_type", strconv.Itoa(dataType))
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	// A source data_type keeps sending frames, so this one is read
 	// without a deadline on the body.
@@ -735,7 +761,7 @@ func (connection *Connection) PlayClose(sessionId string) error {
 	params.Add("session", sessionId)
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 
@@ -792,7 +818,7 @@ func (connection *Connection) LiveStream(writer http.ResponseWriter, channelId s
 	params.Add("stream_id", streamId)
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	// A live stream runs until the caller goes away, so this one is
 	// read without a deadline on the body.
@@ -889,7 +915,7 @@ func (connection *Connection) Logs(logType uint, startTime int64, maxResults int
 	params.Add("dir", "ASC")
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 
@@ -922,7 +948,7 @@ func (connection *Connection) Logs(logType uint, startTime int64, maxResults int
 
 // CameraSnapshot returns the JPEG the camera recorded at imageTs, which
 // is a UTC timestamp in milliseconds. QVR returns the current frame when
-// imageTs is zero, and only honours it from API version 1.2.0 onwards.
+// imageTs is zero and only honors it from API version 1.2.0 onwards.
 func (connection *Connection) CameraSnapshot(channelId string, imageTs int64) ([]byte, error) {
 	baseUrl, err := url.Parse(connection.url)
 	if err != nil {
@@ -939,7 +965,7 @@ func (connection *Connection) CameraSnapshot(channelId string, imageTs int64) ([
 	}
 
 	baseUrl.RawQuery = params.Encode()
-	log.Printf("[INFO] %s\n", baseUrl.String())
+	log.Printf("[INFO] %s\n", redact(baseUrl))
 
 	response, err := connection.client.Get(baseUrl.String())
 	if err != nil {
@@ -952,7 +978,7 @@ func (connection *Connection) CameraSnapshot(channelId string, imageTs int64) ([
 	}
 
 	// QVR reports a refused snapshot as a JSON error document with a
-	// 200, so the frame has to be recognised before it is handed back.
+	// 200, so the frame has to be recognized before it is handed back.
 	if !bytes.HasPrefix(body, jpegStartOfImage) {
 		return nil, fmt.Errorf("snapshot of %s is not a jpeg: %s", channelId, summarize(body))
 	}

@@ -29,7 +29,7 @@ package qvrpro
 import (
 	"net/http"
 	"net/http/httptest"
-	"strconv"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -62,7 +62,8 @@ func TestParsePlayResponseReadsTheSession(t *testing.T) {
 func TestParsePlayResponseReportsUnknownCodes(t *testing.T) {
 	_, err := parsePlayResponse([]byte("v1\n123456\n"))
 
-	if err == nil || !strings.Contains(err.Error(), "123456") {
+	// Reported as hex so that it can be looked up in the QNAP docs.
+	if err == nil || !strings.Contains(err.Error(), "0x0001E240") {
 		t.Fatalf("unmapped code should be reported: %v", err)
 	}
 }
@@ -354,7 +355,7 @@ func TestPlayFrameClosesItsSessionAfterAFailure(t *testing.T) {
 			_, _ = writer.Write([]byte("v1\n0\nSESSION123\n"))
 		case "seek":
 			// 0x93010107, seek_time not specified.
-			_, _ = writer.Write([]byte("v1\n" + strconv.Itoa(convertHexToInt("0x93010107")) + "\n"))
+			_, _ = writer.Write([]byte("v1\n0x93010107\n"))
 		case "close":
 			mutex.Lock()
 			closed = true
@@ -383,5 +384,94 @@ func TestPlayFrameClosesItsSessionAfterAFailure(t *testing.T) {
 
 	if !closed {
 		t.Fatal("the session was left open")
+	}
+}
+
+// QVR writes the documented error codes either way round, and they run
+// past the top of a signed 32 bit int.
+func TestParsePlayResponseTakesEitherCodeFormat(t *testing.T) {
+	for _, code := range []string{"0x93010107", "2466316551"} {
+		_, err := parsePlayResponse([]byte("v1\n" + code + "\n"))
+
+		if err == nil || err.Error() != "seek_time not specified" {
+			t.Fatalf("code %s was not recognised: %v", code, err)
+		}
+	}
+}
+
+func TestRecordingTypesMatchTheDocumentation(t *testing.T) {
+	if RecordingTypeAllFiles != 0 || RecordingTypeOnlyAlarmFile != 1 || RecordingTypeNormalFile != 2 {
+		t.Fatalf("recording types are wrong: %d %d %d",
+			RecordingTypeAllFiles, RecordingTypeOnlyAlarmFile, RecordingTypeNormalFile)
+	}
+}
+
+// The password and the session id must not reach a log file.
+func TestRedactHidesTheSecrets(t *testing.T) {
+	target, err := url.Parse("https://heimdall.example/cgi-bin/authLogin.cgi?pwd=c2VjcmV0&sid=SID42&user=device&session=SESSION123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	text := redact(target)
+
+	for _, secret := range []string{"c2VjcmV0", "SID42"} {
+		if strings.Contains(text, secret) {
+			t.Fatalf("%s survived redaction: %s", secret, text)
+		}
+	}
+
+	// The account and the playback session are worth keeping.
+	if !strings.Contains(text, "user=device") || !strings.Contains(text, "session=SESSION123") {
+		t.Fatalf("redaction took too much: %s", text)
+	}
+
+	// The url itself is untouched, it is still the one being requested.
+	if !strings.Contains(target.RawQuery, "pwd=c2VjcmV0") {
+		t.Fatalf("redaction changed the request: %s", target.RawQuery)
+	}
+}
+
+func TestCreateSessionIdAsksForWhatTheDocumentationDescribes(t *testing.T) {
+	var query url.Values
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if strings.Contains(request.URL.Path, "authLogin") {
+			_, _ = writer.Write([]byte(`<QDocRoot><authPassed>1</authPassed><authSid>SID42</authSid></QDocRoot>`))
+			return
+		}
+
+		query = request.URL.Query()
+		_, _ = writer.Write([]byte("v1\n0\nSESSION123\n"))
+	}))
+	defer server.Close()
+
+	connection := Create(server.URL+"/open", QvrPro, 60)
+	if !connection.Login("device", "secret") {
+		t.Fatal("login failed")
+	}
+
+	sessionId, err := connection.CreateSessionId("channel6", 1444436555000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sessionId != "SESSION123" {
+		t.Fatalf("bad session id %q", sessionId)
+	}
+
+	for name, want := range map[string]string{
+		"cmd":            "open",
+		"ver":            apiPlayVersion,
+		"ch_sid":         "channel6",
+		"start_time":     "1444436555000",
+		"recording_type": "0",
+		"data_type":      "0",
+		"stream":         "0",
+		"stream_id":      "0",
+	} {
+		if query.Get(name) != want {
+			t.Errorf("%s = %q, want %q", name, query.Get(name), want)
+		}
 	}
 }
